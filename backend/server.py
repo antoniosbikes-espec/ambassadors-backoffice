@@ -429,13 +429,16 @@ def get_db():
 
 def init_db():
     conn = get_db()
+    # Ejecutamos SCHEMA y SEEDS siempre para asegurar tablas y catálogos básicos
     conn.executescript(SCHEMA)
     conn.executescript(SEEDS)
-    # Solo cargar datos demo si no hay embajadores
+    
+    # Solo cargar datos demo de personas si la tabla está totalmente vacía
     count = conn.execute("SELECT COUNT(*) FROM ambassadors").fetchone()[0]
     if count == 0:
-        print("[DB] Cargando datos demo...")
+        print("[DB] Cargando datos demo (embajadores)...")
         conn.executescript(DEMO_DATA)
+        
     conn.commit()
     conn.close()
     print(f"[DB] Initialised at {DB_PATH}")
