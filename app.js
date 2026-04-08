@@ -931,10 +931,13 @@ document.getElementById('btn-add-rpu').addEventListener('click', () => {
 // ─────────────────────────────────────────────────────────────
 function renderSettings() {
   const categories = [
-    { key: 'platform', listId: 'platform-list' },
-    { key: 'niche',    listId: 'niche-list' },
-    { key: 'country',  listId: 'country-list' },
-    { key: 'language', listId: 'language-list' },
+    { key: 'platform',        listId: 'platform-list' },
+    { key: 'niche',           listId: 'niche-list' },
+    { key: 'country',         listId: 'country-list' },
+    { key: 'language',        listId: 'language-list' },
+    { key: 'contract_status', listId: 'contract_status-list' },
+    { key: 'mention_type',    listId: 'mention_type-list' },
+    { key: 'currency',        listId: 'currency-list' },
   ];
   categories.forEach(({ key, listId }) => {
     const ul = document.getElementById(listId);
@@ -956,11 +959,15 @@ window.deleteListValue = async (id, listName) => {
   renderSettings();
 };
 
-['platform','niche','country','language'].forEach(key => {
+['platform','niche','country','language','contract_status','mention_type','currency'].forEach(key => {
   const btn = document.getElementById(`btn-add-${key}`);
   if (!btn) return;
+  const labels = {
+    platform: 'Plataforma', niche: 'Nicho', country: 'País', language: 'Idioma',
+    contract_status: 'Estado de contrato', mention_type: 'Tipo de mención', currency: 'Moneda',
+  };
   btn.addEventListener('click', () => {
-    openModal(`Añadir ${key}`, `
+    openModal(`Añadir ${labels[key] || key}`, `
       <div class="form-row">
         <div class="form-group"><label class="form-label">Nombre *</label><input type="text" id="st-value" placeholder="Nombre" /></div>
         <div class="form-group"><label class="form-label">Código</label><input type="text" id="st-code" placeholder="ej: ES" maxlength="10" /></div>
@@ -971,7 +978,7 @@ window.deleteListValue = async (id, listName) => {
       if (!value) return false;
       const list = LISTS[key]?.[0];
       const listId = list?.list_id;
-      if (!listId) { alert('No se encontró la lista'); return false; }
+      if (!listId) { alert('No se encontró la lista para "' + key + '". Comprueba que exista en la base de datos.'); return false; }
       await POST('/list_values', { list_id: listId, value, code });
       await loadLists();
       renderSettings();
