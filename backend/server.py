@@ -38,7 +38,7 @@ PORT    = int(os.environ.get('PORT', 8787))
 # ─────────────────────────────────────────────────────────────
 
 SCHEMA = """
-PRAGMA journal_mode=WAL;
+PRAGMA journal_mode=DELETE; -- Más compatible con discos de red que WAL
 PRAGMA foreign_keys = ON;
 
 -- ── Catálogos ──────────────────────────────────────────────
@@ -431,8 +431,10 @@ WHERE (SELECT COUNT(*) FROM rpus) < 2;
 
 
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
+    # Aumentamos el timeout a 30 segundos para evitar bloqueos
+    conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=DELETE")
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
