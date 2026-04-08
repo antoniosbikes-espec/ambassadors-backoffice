@@ -22,6 +22,15 @@ DB_PATH = os.path.join(DB_DIR, 'ambassadors.db')
 if not os.path.exists(DB_DIR):
     os.makedirs(DB_DIR, exist_ok=True)
 
+# Intentamos forzar permisos de escritura si estamos en Railway/Linux
+try:
+    if os.name != 'nt': # No en Windows
+        os.chmod(DB_DIR, 0o777)
+        if os.path.exists(DB_PATH):
+            os.chmod(DB_PATH, 0o666)
+except:
+    pass
+
 PORT    = int(os.environ.get('PORT', 8787))
 
 # ─────────────────────────────────────────────────────────────
