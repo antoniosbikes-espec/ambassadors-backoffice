@@ -740,6 +740,20 @@ class Handler(BaseHTTPRequestHandler):
 
     def delete_ambassador(self, aid):
         db = get_db()
+        # Borramos en cascada manualmente para evitar errores de Foreign Key
+        # Borrar registros de visualizaciones de sus posts
+        db.execute("""DELETE FROM post_views_history WHERE post_id IN 
+                      (SELECT id FROM posts WHERE profile_id IN 
+                      (SELECT id FROM profiles WHERE ambassador_id=?))""", (aid,))
+        # Borrar posts
+        db.execute("""DELETE FROM posts WHERE profile_id IN 
+                      (SELECT id FROM profiles WHERE ambassador_id=?)""", (aid,))
+        # Borrar contratos
+        db.execute("""DELETE FROM contracts WHERE profile_id IN 
+                      (SELECT id FROM profiles WHERE ambassador_id=?)""", (aid,))
+        # Borrar perfiles
+        db.execute("DELETE FROM profiles WHERE ambassador_id=?", (aid,))
+        # Finalmente, borrar embajador
         db.execute("DELETE FROM ambassadors WHERE id=?", (aid,))
         db.commit()
         db.close()
