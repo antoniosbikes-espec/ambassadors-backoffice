@@ -8,7 +8,7 @@
  * 4. Sube los cambios a Netlify (git push o drag & drop)
  */
 
-const RAILWAY_URL = 'PEGA_AQUI_TU_URL_DE_RAILWAY'; // ← edita esto
+const RAILWAY_URL = 'https://ambassadors-backoffice-production.up.railway.app'; // ← Railway
 
 // ─── No tocar lo de abajo ──────────────────────────────────
 const CONFIG = {
