@@ -10,7 +10,13 @@ from datetime import datetime, timezone
 from urllib.parse import urlparse, parse_qs
 
 # Usamos una carpeta dedicada para la base de datos en el raíz
-DB_DIR  = '/data' if os.path.exists('/data') else os.path.join(os.path.dirname(os.path.dirname(__file__)), 'db')
+if os.path.exists('/persistent_data'):
+    DB_DIR = '/persistent_data'
+elif os.path.exists('/data'):
+    DB_DIR = '/data'
+else:
+    DB_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'db')
+
 DB_PATH = os.path.join(DB_DIR, 'ambassadors.db')
 
 if not os.path.exists(DB_DIR):
