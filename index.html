@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <!-- config.js debe cargarse ANTES que app.js -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ambassadors — Back Office</title>
+  <meta name="description" content="Plataforma de gestión de embajadores de marca. Analítica, contratos, contenido y revenue en un solo lugar." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">
+        <div class="logo-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="8" r="4" fill="currentColor" opacity="0.9"/>
+            <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.6"/>
+            <circle cx="19" cy="7" r="2.5" fill="currentColor" opacity="0.5"/>
+            <circle cx="5" cy="7" r="2.5" fill="currentColor" opacity="0.5"/>
+          </svg>
+        </div>
+        <span class="logo-text">Ambassadors</span>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="#dashboard" class="nav-item active" data-page="dashboard" id="nav-dashboard">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="7" rx="1"/>
+          <rect x="14" y="3" width="7" height="7" rx="1"/>
+          <rect x="3" y="14" width="7" height="7" rx="1"/>
+          <rect x="14" y="14" width="7" height="7" rx="1"/>
+        </svg>
+        <span>Dashboard</span>
+      </a>
+      <a href="#ambassadors" class="nav-item" data-page="ambassadors" id="nav-ambassadors">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+        <span>Ambassadors</span>
+      </a>
+      <a href="#posts" class="nav-item" data-page="posts" id="nav-posts">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/>
+          <line x1="16" y1="17" x2="8" y2="17"/>
+          <polyline points="10 9 9 9 8 9"/>
+        </svg>
+        <span>Posts</span>
+      </a>
+      <a href="#analytics" class="nav-item" data-page="analytics" id="nav-analytics">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="20" x2="18" y2="10"/>
+          <line x1="12" y1="20" x2="12" y2="4"/>
+          <line x1="6" y1="20" x2="6" y2="14"/>
+          <line x1="2" y1="20" x2="22" y2="20"/>
+        </svg>
+        <span>Analytics</span>
+      </a>
+      <a href="#revenue" class="nav-item" data-page="revenue" id="nav-revenue">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="12" y1="1" x2="12" y2="23"/>
+          <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+        </svg>
+        <span>Revenue</span>
+      </a>
+      <div class="nav-divider"></div>
+      <a href="#settings" class="nav-item" data-page="settings" id="nav-settings">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+        <span>Settings</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar">A</div>
+        <div class="user-details">
+          <span class="user-name">Admin</span>
+          <span class="user-role">Back Office</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content" id="main-content">
+
+    <!-- Global Filters Bar -->
+    <div class="top-bar" id="top-bar">
+      <div class="page-breadcrumb">
+        <span id="breadcrumb-text">Dashboard</span>
+      </div>
+      <div class="global-filters" id="global-filters">
+        <select class="filter-select" id="filter-date">
+          <option value="last30">Últimos 30 días</option>
+          <option value="last90">Últimos 90 días</option>
+          <option value="last365">Último año</option>
+          <option value="all">Todo el tiempo</option>
+        </select>
+        <select class="filter-select" id="filter-country">
+          <option value="">Todos los países</option>
+          <option value="ES">España</option>
+          <option value="MX">México</option>
+          <option value="AR">Argentina</option>
+          <option value="US">Estados Unidos</option>
+          <option value="UK">Reino Unido</option>
+        </select>
+        <select class="filter-select" id="filter-niche">
+          <option value="">Todos los nichos</option>
+          <option value="fashion">Fashion</option>
+          <option value="beauty">Beauty</option>
+          <option value="fitness">Fitness</option>
+          <option value="tech">Tech</option>
+          <option value="food">Food</option>
+          <option value="travel">Travel</option>
+        </select>
+        <select class="filter-select" id="filter-platform">
+          <option value="">Todas las plataformas</option>
+          <option value="youtube">YouTube</option>
+          <option value="instagram">Instagram</option>
+          <option value="tiktok">TikTok</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Pages -->
+    <div class="page-container">
+
+      <!-- DASHBOARD PAGE -->
+      <section class="page active" id="page-dashboard">
+        <div class="page-header">
+          <h1>Dashboard</h1>
+          <p class="page-subtitle">Resumen ejecutivo del programa de embajadores</p>
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi-card" id="kpi-active-ambassadors">
+            <div class="kpi-icon kpi-purple">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
+            </div>
+            <div class="kpi-body">
+              <span class="kpi-label">Embajadores activos</span>
+              <span class="kpi-value" data-target="48">0</span>
+              <div class="kpi-trend up">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
+                +12% vs período anterior
+              </div>
+            </div>
+          </div>
+          <div class="kpi-card" id="kpi-active-profiles">
+            <div class="kpi-icon kpi-blue">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 2H3v16h5l3 3 3-3h7z"/>
+                <path d="M8 9h8M8 13h6"/>
+              </svg>
+            </div>
+            <div class="kpi-body">
+              <span class="kpi-label">Perfiles activos</span>
+              <span class="kpi-value" data-target="134">0</span>
+              <div class="kpi-trend up">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
+                +8% vs período anterior
+              </div>
+            </div>
+          </div>
+          <div class="kpi-card" id="kpi-signed-contracts">
+            <div class="kpi-icon kpi-green">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <polyline points="9 15 11 17 15 13"/>
+              </svg>
+            </div>
+            <div class="kpi-body">
+              <span class="kpi-label">Contratos firmados</span>
+              <span class="kpi-value" data-target="61">0</span>
+              <div class="kpi-trend up">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
+                +5% vs período anterior
+              </div>
+            </div>
+          </div>
+          <div class="kpi-card" id="kpi-total-views">
+            <div class="kpi-icon kpi-orange">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            </div>
+            <div class="kpi-body">
+              <span class="kpi-label">Visualizaciones totales</span>
+              <span class="kpi-value" data-target="4820000" data-format="compact">0</span>
+              <div class="kpi-trend up">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
+                +23% vs período anterior
+              </div>
+            </div>
+          </div>
+          <div class="kpi-card wide" id="kpi-revenue">
+            <div class="kpi-icon kpi-teal">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="1" x2="12" y2="23"/>
+                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+              </svg>
+            </div>
+            <div class="kpi-body">
+              <span class="kpi-label">Revenue esperado</span>
+              <span class="kpi-value" data-target="128400" data-format="currency">0</span>
+              <div class="kpi-sub-row">
+                <div>
+                  <span class="kpi-sublabel">Revenue real</span>
+                  <span class="kpi-subvalue">€89.240</span>
+                </div>
+                <div class="kpi-delta negative">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                  Δ –30,5%
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="charts-row">
+          <div class="chart-card" id="chart-views-trend">
+            <div class="chart-header">
+              <h3>Tendencia de visualizaciones</h3>
+              <div class="chart-legend">
+                <span class="legend-dot" style="background: var(--accent-purple)"></span><span>Views</span>
+              </div>
+            </div>
+            <canvas id="canvas-views" height="200"></canvas>
+          </div>
+          <div class="chart-card" id="chart-platform-split">
+            <div class="chart-header">
+              <h3>Distribución por plataforma</h3>
+            </div>
+            <canvas id="canvas-platforms" height="200"></canvas>
+          </div>
+        </div>
+
+        <!-- Top Ambassadors Table -->
+        <div class="table-card" id="top-ambassadors-table">
+          <div class="table-header">
+            <h3>Top Embajadores</h3>
+            <a href="#ambassadors" class="btn-link" data-page="ambassadors">Ver todos →</a>
+          </div>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Embajador</th>
+                <th>País</th>
+                <th>Plataforma</th>
+                <th>Visualizaciones</th>
+                <th>Contenido Score</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody id="top-ambassadors-body">
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- AMBASSADORS PAGE -->
+      <section class="page" id="page-ambassadors">
+        <div class="page-header">
+          <h1>Ambassadors</h1>
+          <p class="page-subtitle">Gestión completa del programa de embajadores</p>
+          <button class="btn-primary" id="btn-new-ambassador">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Nuevo embajador
+          </button>
+        </div>
+
+        <!-- Filters bar -->
+        <div class="filter-bar">
+          <div class="search-box">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="ambassador-search" placeholder="Buscar embajador..." />
+          </div>
+          <select class="filter-select sm" id="amb-filter-country">
+            <option value="">País</option>
+            <option value="ES">España</option>
+            <option value="MX">México</option>
+            <option value="AR">Argentina</option>
+            <option value="US">EEUU</option>
+          </select>
+          <select class="filter-select sm" id="amb-filter-platform">
+            <option value="">Plataforma</option>
+            <option value="youtube">YouTube</option>
+            <option value="instagram">Instagram</option>
+            <option value="tiktok">TikTok</option>
+          </select>
+          <select class="filter-select sm" id="amb-filter-status">
+            <option value="">Estado</option>
+            <option value="active">Activo</option>
+            <option value="inactive">Inactivo</option>
+            <option value="pending">Pendiente</option>
+          </select>
+        </div>
+
+        <!-- Ambassador List / Detail Split View -->
+        <div class="split-view" id="ambassadors-split">
+          <div class="list-panel" id="ambassador-list-panel">
+            <div class="list-scroll">
+              <table class="data-table" id="ambassadors-table">
+                <thead>
+                  <tr>
+                    <th>Nombre</th>
+                    <th>País</th>
+                    <th>Idioma</th>
+                    <th>Perfiles</th>
+                    <th>Estado contrato</th>
+                  </tr>
+                </thead>
+                <tbody id="ambassadors-body"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Ambassador Detail Panel -->
+          <div class="detail-panel" id="ambassador-detail-panel">
+            <div class="detail-empty" id="detail-empty">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
+              <p>Selecciona un embajador para ver sus detalles</p>
+            </div>
+
+            <div class="detail-content" id="detail-content" style="display:none">
+              <div class="detail-header">
+                <div class="detail-avatar" id="detail-avatar">J</div>
+                <div class="detail-title">
+                  <h2 id="detail-name">Nombre</h2>
+                  <div class="detail-meta">
+                    <span id="detail-country-badge" class="badge badge-country">ES</span>
+                    <span id="detail-lang-badge" class="badge badge-lang">ES</span>
+                    <span id="detail-status-badge" class="badge badge-active">Activo</span>
+                  </div>
+                  <p id="detail-email" class="detail-email">email@example.com</p>
+                </div>
+                <button class="btn-icon" id="btn-edit-ambassador" title="Editar embajador">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                </button>
+              </div>
+
+              <!-- Tabs -->
+              <div class="tabs">
+                <button class="tab active" data-tab="overview">Overview</button>
+                <button class="tab" data-tab="profiles">Perfiles</button>
+                <button class="tab" data-tab="contracts">Contratos</button>
+                <button class="tab" data-tab="content">Contenido</button>
+              </div>
+
+              <div class="tab-content" id="tab-overview">
+                <div class="overview-stats">
+                  <div class="stat-box">
+                    <span class="stat-label">Views totales</span>
+                    <span class="stat-value" id="ov-views">1.2M</span>
+                  </div>
+                  <div class="stat-box">
+                    <span class="stat-label">Posts publicados</span>
+                    <span class="stat-value" id="ov-posts">34</span>
+                  </div>
+                  <div class="stat-box">
+                    <span class="stat-label">Content Score avg.</span>
+                    <span class="stat-value" id="ov-score">0.87</span>
+                  </div>
+                  <div class="stat-box">
+                    <span class="stat-label">Revenue generado</span>
+                    <span class="stat-value" id="ov-revenue">€4.320</span>
+                  </div>
+                </div>
+                <div class="mini-chart-card">
+                  <h4>Views por día (últimos 30 días)</h4>
+                  <canvas id="canvas-ambassador-views" height="120"></canvas>
+                </div>
+              </div>
+
+              <div class="tab-content" id="tab-profiles" style="display:none">
+                <div class="profiles-list" id="profiles-list"></div>
+                <button class="btn-secondary btn-block" id="btn-add-profile">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  Añadir perfil
+                </button>
+              </div>
+
+              <div class="tab-content" id="tab-contracts" style="display:none">
+                <div class="contracts-list" id="contracts-list"></div>
+                <button class="btn-secondary btn-block" id="btn-add-contract">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  Nuevo contrato
+                </button>
+              </div>
+
+              <div class="tab-content" id="tab-content" style="display:none">
+                <div class="content-list" id="content-list"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- POSTS PAGE -->
+      <section class="page" id="page-posts">
+        <div class="page-header">
+          <h1>Posts</h1>
+          <p class="page-subtitle">Contenido publicado y métricas de visualización</p>
+          <button class="btn-primary" id="btn-new-post">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Registrar post
+          </button>
+        </div>
+
+        <div class="filter-bar">
+          <div class="search-box">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="posts-search" placeholder="Buscar por URL o embajador..." />
+          </div>
+          <select class="filter-select sm" id="posts-filter-platform">
+            <option value="">Plataforma</option>
+            <option value="youtube">YouTube</option>
+            <option value="instagram">Instagram</option>
+            <option value="tiktok">TikTok</option>
+          </select>
+          <select class="filter-select sm" id="posts-filter-mention">
+            <option value="">Tipo mención</option>
+            <option value="dedicated">Dedicado</option>
+            <option value="integrated">Integrado</option>
+            <option value="story">Story</option>
+          </select>
+        </div>
+
+        <div class="table-card">
+          <table class="data-table" id="posts-table">
+            <thead>
+              <tr>
+                <th>Embajador</th>
+                <th>Plataforma</th>
+                <th>Fecha publicación</th>
+                <th>Tipo mención</th>
+                <th>Views totales</th>
+                <th>Content Score</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="posts-body"></tbody>
+          </table>
+          <div class="table-footer">
+            <span id="posts-count" class="table-count">— posts</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ANALYTICS PAGE -->
+      <section class="page" id="page-analytics">
+        <div class="page-header">
+          <h1>Analytics</h1>
+          <p class="page-subtitle">Centro de comparativas y análisis de rendimiento</p>
+        </div>
+
+        <div class="analytics-controls">
+          <div class="control-group">
+            <label class="control-label">Agrupar por</label>
+            <div class="pill-group" id="group-by">
+              <button class="pill active" data-groupby="ambassador">Embajador</button>
+              <button class="pill" data-groupby="profile">Perfil</button>
+              <button class="pill" data-groupby="platform">Plataforma</button>
+              <button class="pill" data-groupby="niche">Nicho</button>
+              <button class="pill" data-groupby="country">País</button>
+            </div>
+          </div>
+          <div class="control-group">
+            <label class="control-label">Métrica X</label>
+            <select class="filter-select" id="metric-x">
+              <option value="views">Views</option>
+              <option value="posts">Posts</option>
+              <option value="content_score">Content Score</option>
+            </select>
+          </div>
+          <div class="control-group">
+            <label class="control-label">Métrica Y</label>
+            <select class="filter-select" id="metric-y">
+              <option value="revenue">Revenue</option>
+              <option value="views">Views</option>
+              <option value="content_score">Content Score</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="charts-row">
+          <div class="chart-card large" id="scatter-chart-card">
+            <div class="chart-header">
+              <h3>Scatter plot — Rendimiento comparado</h3>
+            </div>
+            <canvas id="canvas-scatter" height="320"></canvas>
+          </div>
+          <div class="chart-card" id="cumulative-chart-card">
+            <div class="chart-header">
+              <h3>Acumulado de views</h3>
+            </div>
+            <canvas id="canvas-cumulative" height="320"></canvas>
+          </div>
+        </div>
+
+        <!-- Ranking table -->
+        <div class="table-card">
+          <div class="table-header">
+            <h3>Ranking por grupo</h3>
+          </div>
+          <table class="data-table" id="analytics-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Grupo</th>
+                <th>Views totales</th>
+                <th>Posts</th>
+                <th>Content Score avg.</th>
+                <th>Revenue</th>
+              </tr>
+            </thead>
+            <tbody id="analytics-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- REVENUE PAGE -->
+      <section class="page" id="page-revenue">
+        <div class="page-header">
+          <h1>Revenue</h1>
+          <p class="page-subtitle">Gestión de ingresos reales y RPUs</p>
+        </div>
+
+        <div class="tabs main-tabs">
+          <button class="tab active" data-maintab="actual">Revenue Actual</button>
+          <button class="tab" data-maintab="rpus">RPUs</button>
+        </div>
+
+        <!-- Revenue Actual Tab -->
+        <div class="main-tab-content" id="maintab-actual">
+          <div class="table-actions">
+            <button class="btn-primary" id="btn-import-revenue">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Importar CSV
+            </button>
+            <button class="btn-secondary" id="btn-add-revenue">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Añadir entrada
+            </button>
+          </div>
+          <div class="table-card">
+            <table class="data-table" id="revenue-table">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>País</th>
+                  <th>Nicho</th>
+                  <th>Revenue real (€)</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="revenue-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- RPUs Tab -->
+        <div class="main-tab-content" id="maintab-rpus" style="display:none">
+          <div class="table-actions">
+            <button class="btn-primary" id="btn-add-rpu">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Añadir RPU
+            </button>
+          </div>
+          <div class="table-card">
+            <table class="data-table" id="rpu-table">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>País</th>
+                  <th>Nicho</th>
+                  <th>RPU (€/view)</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="rpu-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- SETTINGS PAGE -->
+      <section class="page" id="page-settings">
+        <div class="page-header">
+          <h1>Settings</h1>
+          <p class="page-subtitle">Gestión de catálogos y valores de lista</p>
+        </div>
+
+        <div class="settings-grid">
+          <div class="settings-card" id="settings-platforms">
+            <div class="settings-card-header">
+              <h3>Plataformas</h3>
+              <button class="btn-icon" id="btn-add-platform">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              </button>
+            </div>
+            <ul class="catalog-list" id="platform-list"></ul>
+          </div>
+          <div class="settings-card" id="settings-niches">
+            <div class="settings-card-header">
+              <h3>Nichos</h3>
+              <button class="btn-icon" id="btn-add-niche">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              </button>
+            </div>
+            <ul class="catalog-list" id="niche-list"></ul>
+          </div>
+          <div class="settings-card" id="settings-countries">
+            <div class="settings-card-header">
+              <h3>Países</h3>
+              <button class="btn-icon" id="btn-add-country">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              </button>
+            </div>
+            <ul class="catalog-list" id="country-list"></ul>
+          </div>
+          <div class="settings-card" id="settings-languages">
+            <div class="settings-card-header">
+              <h3>Idiomas</h3>
+              <button class="btn-icon" id="btn-add-language">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              </button>
+            </div>
+            <ul class="catalog-list" id="language-list"></ul>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- /page-container -->
+  </main>
+
+  <!-- Modal Overlay -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal" id="modal">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modal-title">Modal</h3>
+        <button class="btn-icon" id="modal-close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+      <div class="modal-footer" id="modal-footer">
+        <button class="btn-secondary" id="modal-cancel">Cancelar</button>
+        <button class="btn-primary" id="modal-confirm">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

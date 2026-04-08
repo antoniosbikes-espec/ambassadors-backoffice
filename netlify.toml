@@ -1,0 +1,9 @@
+# ── Netlify config ────────────────────────────────────────────
+[build]
+  publish = "."
+
+# Redirigir todas las rutas al index.html (SPA)
+[[redirects]]
+  from = "/*"
+  to   = "/index.html"
+  status = 200

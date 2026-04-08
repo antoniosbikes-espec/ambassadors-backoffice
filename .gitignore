@@ -1,0 +1,24 @@
+# Dependencies / build
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+.env
+.env.local
+
+# SQLite database (no subir la BBDD local, Railway genera la suya)
+backend/ambassadors.db
+backend/ambassadors.db-shm
+backend/ambassadors.db-wal
+ambassadors.db
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
