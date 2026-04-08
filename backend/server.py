@@ -9,7 +9,13 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime, timezone
 from urllib.parse import urlparse, parse_qs
 
-DB_PATH = os.path.join(os.path.dirname(__file__), 'ambassadors.db')
+# Si existe la carpeta /data (volumen persistente en Railway), usamos esa ruta.
+# Si no, usamos la carpeta del backend como hasta ahora.
+if os.path.exists('/data'):
+    DB_PATH = '/data/ambassadors.db'
+else:
+    DB_PATH = os.path.join(os.path.dirname(__file__), 'ambassadors.db')
+
 PORT    = int(os.environ.get('PORT', 8787))
 
 # ─────────────────────────────────────────────────────────────
