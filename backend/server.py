@@ -419,7 +419,11 @@ def init_db():
     conn = get_db()
     conn.executescript(SCHEMA)
     conn.executescript(SEEDS)
-    conn.executescript(DEMO_DATA)
+    # Solo cargar datos demo si no hay embajadores
+    count = conn.execute("SELECT COUNT(*) FROM ambassadors").fetchone()[0]
+    if count == 0:
+        print("[DB] Cargando datos demo...")
+        conn.executescript(DEMO_DATA)
     conn.commit()
     conn.close()
     print(f"[DB] Initialised at {DB_PATH}")
