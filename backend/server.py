@@ -9,12 +9,12 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime, timezone
 from urllib.parse import urlparse, parse_qs
 
-# Si existe la carpeta /data (volumen persistente en Railway), usamos esa ruta.
-# Si no, usamos la carpeta del backend como hasta ahora.
-if os.path.exists('/data'):
-    DB_PATH = '/data/ambassadors.db'
-else:
-    DB_PATH = os.path.join(os.path.dirname(__file__), 'ambassadors.db')
+# Usamos una carpeta dedicada para la base de datos en el raíz
+DB_DIR  = '/data' if os.path.exists('/data') else os.path.join(os.path.dirname(os.path.dirname(__file__)), 'db')
+DB_PATH = os.path.join(DB_DIR, 'ambassadors.db')
+
+if not os.path.exists(DB_DIR):
+    os.makedirs(DB_DIR, exist_ok=True)
 
 PORT    = int(os.environ.get('PORT', 8787))
 
