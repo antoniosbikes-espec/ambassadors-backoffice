@@ -1146,68 +1146,94 @@ class Handler(BaseHTTPRequestHandler):
 
     # ── DASHBOARD (agregado) ─────────────────────────────────
     def get_dashboard(self, qs=None):
-        where_a = [] # para embajadores
-        where_p = [] # para perfiles/posts
+        where_parts = []
         params = []
         days = '30'
         
+        # Recogemos filtros básicos
         if qs:
             if qs.get('country_code'):
-                where_a.append('a.country_id = (SELECT id FROM list_values WHERE code=?)')
+                where_parts.append('a.country_id = (SELECT id FROM list_values WHERE code=?)')
                 params.append(qs['country_code'][0])
             if qs.get('niche_code'):
-                where_p.append('p.niche_id = (SELECT id FROM list_values WHERE code=?)')
+                where_parts.append('p.niche_id = (SELECT id FROM list_values WHERE code=?)')
                 params.append(qs['niche_code'][0])
             if qs.get('platform_code'):
-                where_p.append('p.platform_id = (SELECT id FROM list_values WHERE code=?)')
+                where_parts.append('p.platform_id = (SELECT id FROM list_values WHERE code=?)')
                 params.append(qs['platform_code'][0])
             if qs.get('days'):
                 days = qs['days'][0]
 
-        w_a = (" WHERE " + " AND ".join(where_a)) if where_a else ""
-        w_p = (" AND " + " AND ".join(where_p)) if where_p else ""
+        # Construimos la base común de las consultas para que filtrar sea fácil
+        base_join = "FROM ambassadors a LEFT JOIN profiles p ON p.ambassador_id = a.id"
+        where_sql = (" WHERE " + " AND ".join(where_parts)) if where_parts else ""
 
         db = get_db()
-        total_ambassadors = db.execute(f"SELECT COUNT(*) FROM ambassadors a {w_a}", params).fetchone()[0]
-        total_profiles    = db.execute(f"SELECT COUNT(*) FROM profiles p JOIN ambassadors a ON a.id=p.ambassador_id {w_a} {w_p}", params + params[-2:] if where_p else params).fetchone()[0]
         
-        # Simplificamos para el dashboard: usamos los mismos filtros en las queries principales
-        signed_contracts  = db.execute(f"""
-            SELECT COUNT(*) FROM contracts c
-            JOIN profiles p ON p.id=c.profile_id
-            JOIN ambassadors a ON a.id=p.ambassador_id
-            JOIN list_values lv ON lv.id=c.status_id 
-            WHERE lv.code='signed' {w_a.replace('WHERE','AND')} {w_p}
-        """, params * 2 if where_p else params).fetchone()[0]
+        # 1. KPIs principales
+        res = db.execute(f"SELECT COUNT(DISTINCT a.id), COUNT(DISTINCT p.id) {base_join} {where_sql}", params).fetchone()
+        total_ambassadors = res[0]
+        total_profiles    = res[1]
         
+        # Contratos firmados
+        signed_contracts = db.execute(f"""
+            SELECT COUNT(DISTINCT c.id) {base_join}
+            JOIN contracts c ON c.profile_id = p.id
+            JOIN list_values lv ON lv.id = c.status_id
+            {where_sql} {" AND " if where_parts else " WHERE "} lv.code='signed'
+        """, params).fetchone()[0]
+        
+        # Views totales
         total_views = db.execute(f"""
-            SELECT COALESCE(SUM(pvh.new_views),0) FROM post_views_history pvh
-            JOIN posts po ON po.id=pvh.post_id
-            JOIN profiles p ON p.id=po.profile_id
-            JOIN ambassadors a ON a.id=p.ambassador_id
-            {w_a} {w_p}
-        """, params * 2 if where_p else params).fetchone()[0]
+            SELECT COALESCE(SUM(pvh.new_views),0) {base_join}
+            JOIN posts po ON po.profile_id = p.id
+            JOIN post_views_history pvh ON pvh.post_id = po.id
+            {where_sql}
+        """, params).fetchone()[0]
 
-        # Views trend (respetando los días seleccionados)
-        trend = db.execute(f"""
-            SELECT pvh.views_date, SUM(pvh.new_views) AS views
-            FROM post_views_history pvh
-            JOIN posts po ON po.id=pvh.post_id
-            JOIN profiles p ON p.id=po.profile_id
-            JOIN ambassadors a ON a.id=p.ambassador_id
-            WHERE pvh.views_date >= date('now',?) {w_a.replace('WHERE','AND')} {w_p}
+        # 2. Tendencia de Views
+        trend_rows = db.execute(f"""
+            SELECT pvh.views_date, SUM(pvh.new_views) AS views {base_join}
+            JOIN posts po ON po.profile_id = p.id
+            JOIN post_views_history pvh ON pvh.post_id = po.id
+            WHERE pvh.views_date >= date('now',?) {where_sql.replace('WHERE','AND')}
             GROUP BY pvh.views_date ORDER BY pvh.views_date
-        """, [f'-{days} days'] + (params * 2 if where_p else params)).fetchall()
+        """, [f'-{days} days'] + params).fetchall()
+        trend = [dict(r) for r in trend_rows]
 
-        # Platform split
-        platform_split = db.execute(f"""
-            SELECT lv.value AS platform, COUNT(DISTINCT p.id) AS count
-            FROM profiles p
-            JOIN ambassadors a ON a.id=p.ambassador_id
-            JOIN list_values lv ON lv.id=p.platform_id
-            {w_a} {w_p}
+        # 3. Distribución por plataforma
+        plat_rows = db.execute(f"""
+            SELECT lv.value AS platform, COUNT(DISTINCT p.id) AS count {base_join}
+            JOIN list_values lv ON lv.id = p.platform_id
+            {where_sql}
             GROUP BY p.platform_id
-        """, params * 2 if where_p else params).fetchall()
+        """, params).fetchall()
+        platform_split = [dict(r) for r in plat_rows]
+
+        # 4. Top Ambassadors (respetando filtros)
+        top_rows = db.execute(f"""
+            SELECT a.id, a.first_name || ' ' || COALESCE(a.last_name,'') AS name,
+                   lv_c.code AS country_code,
+                   COALESCE(SUM(pvh.new_views),0) AS total_views
+            {base_join}
+            LEFT JOIN list_values lv_c ON lv_c.id = a.country_id
+            LEFT JOIN posts po ON po.profile_id = p.id
+            LEFT JOIN post_views_history pvh ON pvh.post_id = po.id
+            {where_sql}
+            GROUP BY a.id ORDER BY total_views DESC LIMIT 5
+        """, params).fetchall()
+        top = [dict(r) for r in top_rows]
+        
+        db.close()
+        self.send_json({
+            'total_ambassadors': total_ambassadors,
+            'total_profiles': total_profiles,
+            'signed_contracts': signed_contracts,
+            'total_views': total_views,
+            'trend': trend,
+            'platform_split': platform_split,
+            'top_ambassadors': top
+        })
 
         # Top ambassadors
         top = db.execute("""
