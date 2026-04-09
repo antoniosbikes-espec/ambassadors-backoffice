@@ -1152,7 +1152,7 @@ class Handler(BaseHTTPRequestHandler):
         days = '30'
         
         if qs:
-            print(f"📊 Dashboard Request Params: {qs}")
+            print(f"📊 Dashboard Request Params: {qs}", flush=True)
             if qs.get('country_code') and qs['country_code'][0]:
                 where_parts.append('a.country_id = (SELECT id FROM list_values WHERE UPPER(code)=UPPER(?))')
                 params.append(qs['country_code'][0])
@@ -1165,13 +1165,13 @@ class Handler(BaseHTTPRequestHandler):
             if qs.get('days'):
                 days = qs['days'][0]
 
-        # Base join robusta: si hay filtros de perfiles (nicho/plataforma), usamos JOIN normal, si no LEFT JOIN
+        # Base join robusta
         needs_p = any(k in qs for k in ['niche_code', 'platform_code']) if qs else False
         join_type = "JOIN" if needs_p else "LEFT JOIN"
         base_join = f"FROM ambassadors a {join_type} profiles p ON p.ambassador_id = a.id"
         
         where_sql = (" WHERE " + " AND ".join(where_parts)) if where_parts else ""
-        print(f"🔍 SQL Where: {where_sql} | Params: {params}")
+        print(f"🔍 SQL Where: {where_sql} | Params: {params}", flush=True)
 
         db = get_db()
         
