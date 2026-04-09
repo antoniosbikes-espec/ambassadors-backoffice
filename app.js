@@ -167,11 +167,13 @@ function statusBadge(code, label) {
 
 function scoreBar(score) {
   score = Number(score) || 0;
-  const pct = Math.round(score * 100);
-  const color = score >= 0.9 ? '#22c55e' : score >= 0.75 ? '#8b5cf6' : '#f97316';
+  // Si por error llegara de 0-100 en vez de 0-1, lo normalizamos
+  const normalized = score > 1 ? score / 100 : score;
+  const pct = Math.min(Math.round(normalized * 100), 100);
+  const color = normalized >= 0.9 ? '#22c55e' : normalized >= 0.75 ? '#8b5cf6' : '#f97316';
   return `<div class="score-cell">
     <div class="score-bar-wrap"><div class="score-bar" style="width:${pct}%;background:${color}"></div></div>
-    <span class="score-value">${score.toFixed(2)}</span>
+    <span class="score-value">${normalized.toFixed(2)}</span>
   </div>`;
 }
 
