@@ -86,12 +86,25 @@ const DELETE = (ep)     => api('DELETE', ep);
 // LISTS
 // ─────────────────────────────────────────────────────────────
 async function loadLists() {
-  const all = await GET('/list_values').catch(() => []);
-  LISTS = {};
-  all.forEach(lv => {
-    if (!LISTS[lv.list_name]) LISTS[lv.list_name] = [];
-    LISTS[lv.list_name].push(lv);
-  });
+  try {
+    const data = await GET('/lists');
+    console.log("📥 Listas recibidas del servidor:", data);
+    if (!Array.isArray(data)) {
+      console.error("❌ Error: El servidor no ha devuelto un array de listas.");
+      return;
+    }
+    // Reiniciar LISTS para evitar duplicados si se llama varias veces
+    Object.keys(LISTS).forEach(k => delete LISTS[k]);
+    
+    data.forEach(item => {
+      const key = item.list_name;
+      if (!LISTS[key]) LISTS[key] = [];
+      LISTS[key].push(item);
+    });
+    console.log("✅ LISTS poblado correctamente:", LISTS);
+  } catch (err) {
+    console.error("❌ Error cargando listas:", err);
+  }
 }
 
 function listById(name, id) {

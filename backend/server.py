@@ -1156,6 +1156,7 @@ class Handler(BaseHTTPRequestHandler):
         params = []
         days = '30'
         
+        # Recogemos filtros básicos
         if qs:
             print(f"📊 Dashboard Request Params: {qs}", flush=True)
             if qs.get('country_code') and qs['country_code'][0]:
@@ -1173,40 +1174,49 @@ class Handler(BaseHTTPRequestHandler):
         # Base join robusta
         needs_p = any(k in qs for k in ['niche_code', 'platform_code']) if qs else False
         join_type = "JOIN" if needs_p else "LEFT JOIN"
-        base_join = f"FROM ambassadors a {join_type} profiles p ON p.ambassador_id = a.id"
+        base_from = f"FROM ambassadors a {join_type} profiles p ON p.ambassador_id = a.id"
         
-        where_sql = (" WHERE " + " AND ".join(where_parts)) if where_parts else ""
-        print(f"🔍 SQL Where: {where_sql} | Params: {params}", flush=True)
+        # Helper para construir la cláusula WHERE de forma limpia
+        def build_where(extra_conditions=[]):
+            all_conds = where_parts + extra_conditions
+            if not all_conds: return "", []
+            return " WHERE " + " AND ".join(all_conds), params + [c[1] for c in extra_conditions if isinstance(c, tuple)]
 
         db = get_db()
         
         # 1. KPIs principales
-        res = db.execute(f"SELECT COUNT(DISTINCT a.id), COUNT(DISTINCT p.id) {base_join} {where_sql}", params).fetchone()
+        w_sql, w_params = build_where()
+        res = db.execute(f"SELECT COUNT(DISTINCT a.id), COUNT(DISTINCT p.id) {base_from} {w_sql}", params).fetchone()
         total_ambassadors = res[0]
         total_profiles    = res[1]
         
         # Contratos firmados
+        w_sql_s, _ = build_where(["lv_s.code='signed'"])
         signed_contracts = db.execute(f"""
-            SELECT COUNT(DISTINCT c.id) {base_join}
+            SELECT COUNT(DISTINCT c.id) {base_from}
             JOIN contracts c ON c.profile_id = p.id
-            JOIN list_values lv ON lv.id = c.status_id
-            {where_sql} {" AND " if where_parts else " WHERE "} lv.code='signed'
+            JOIN list_values lv_s ON lv_s.id = c.status_id
+            {w_sql_s}
         """, params).fetchone()[0]
         
         # Views totales
+        w_sql_v, _ = build_where()
         total_views = db.execute(f"""
-            SELECT COALESCE(SUM(pvh.new_views),0) {base_join}
+            SELECT COALESCE(SUM(pvh.new_views),0) {base_from}
             JOIN posts po ON po.profile_id = p.id
             JOIN post_views_history pvh ON pvh.post_id = po.id
-            {where_sql}
+            {w_sql_v}
         """, params).fetchone()[0]
 
         # 2. Tendencia de Views
+        # Aquí es donde fallaba el AND
+        trend_conds = ["pvh.views_date >= date('now', ?)"]
+        w_sql_t, _ = build_where(trend_conds)
         trend_rows = db.execute(f"""
-            SELECT pvh.views_date, SUM(pvh.new_views) AS views {base_join}
+            SELECT pvh.views_date, SUM(pvh.new_views) AS views {base_from}
             JOIN posts po ON po.profile_id = p.id
             JOIN post_views_history pvh ON pvh.post_id = po.id
-            WHERE pvh.views_date >= date('now',?) {where_sql.replace('WHERE','AND')}
+            {w_sql_t}
             GROUP BY pvh.views_date ORDER BY pvh.views_date
         """, [f'-{days} days'] + params).fetchall()
         trend = [dict(r) for r in trend_rows]
