@@ -600,7 +600,7 @@ class Handler(BaseHTTPRequestHandler):
 
             # ── /api/dashboard ──────────────────────────────
             if path == '/api/dashboard' and method == 'GET':
-                return self.get_dashboard()
+                return self.get_dashboard(qs)
 
             self.send_err('Not found', 404)
 
