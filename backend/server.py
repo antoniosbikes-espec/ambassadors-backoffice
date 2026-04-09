@@ -1222,24 +1222,26 @@ class Handler(BaseHTTPRequestHandler):
         trend = [dict(r) for r in trend_rows]
 
         # 3. Distribución por plataforma
+        w_sql_p, _ = build_where()
         plat_rows = db.execute(f"""
-            SELECT lv.value AS platform, COUNT(DISTINCT p.id) AS count {base_join}
+            SELECT lv.value AS platform, COUNT(DISTINCT p.id) AS count {base_from}
             JOIN list_values lv ON lv.id = p.platform_id
-            {where_sql}
+            {w_sql_p}
             GROUP BY p.platform_id
         """, params).fetchall()
         platform_split = [dict(r) for r in plat_rows]
 
         # 4. Top Ambassadors (respetando filtros)
+        w_sql_top, _ = build_where()
         top_rows = db.execute(f"""
             SELECT a.id, a.first_name || ' ' || COALESCE(a.last_name,'') AS name,
                    lv_c.code AS country_code,
                    COALESCE(SUM(pvh.new_views),0) AS total_views
-            {base_join}
+            {base_from}
             LEFT JOIN list_values lv_c ON lv_c.id = a.country_id
             LEFT JOIN posts po ON po.profile_id = p.id
             LEFT JOIN post_views_history pvh ON pvh.post_id = po.id
-            {where_sql}
+            {w_sql_top}
             GROUP BY a.id ORDER BY total_views DESC LIMIT 5
         """, params).fetchall()
         top = [dict(r) for r in top_rows]
