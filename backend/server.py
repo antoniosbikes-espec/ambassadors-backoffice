@@ -67,6 +67,8 @@ CREATE TABLE IF NOT EXISTS ambassadors (
     last_name            TEXT,
     primary_language_id  INTEGER REFERENCES list_values(id),
     country_id           INTEGER REFERENCES list_values(id),
+    phone                TEXT,
+    notes                TEXT,
     created_at           TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_amb_email    ON ambassadors(email);
@@ -733,9 +735,10 @@ class Handler(BaseHTTPRequestHandler):
         body = self.read_body()
         db = get_db()
         cur = db.execute(
-            "INSERT INTO ambassadors(email,first_name,last_name,primary_language_id,country_id) VALUES(?,?,?,?,?)",
+            "INSERT INTO ambassadors(email,first_name,last_name,primary_language_id,country_id,phone,notes) VALUES(?,?,?,?,?,?,?)",
             (body.get('email'), body.get('first_name'), body.get('last_name'),
-             body.get('primary_language_id'), body.get('country_id'))
+             body.get('primary_language_id'), body.get('country_id'),
+             body.get('phone'), body.get('notes'))
         )
         db.commit()
         row = db.execute("SELECT * FROM ambassadors WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -746,9 +749,10 @@ class Handler(BaseHTTPRequestHandler):
         body = self.read_body()
         db = get_db()
         db.execute("""UPDATE ambassadors SET email=?,first_name=?,last_name=?,
-                      primary_language_id=?,country_id=? WHERE id=?""",
+                      primary_language_id=?,country_id=?,phone=?,notes=? WHERE id=?""",
                    (body.get('email'), body.get('first_name'), body.get('last_name'),
-                    body.get('primary_language_id'), body.get('country_id'), aid))
+                    body.get('primary_language_id'), body.get('country_id'),
+                    body.get('phone'), body.get('notes'), aid))
         db.commit()
         row = db.execute("SELECT * FROM ambassadors WHERE id=?", (aid,)).fetchone()
         db.close()
