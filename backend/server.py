@@ -611,7 +611,12 @@ class Handler(BaseHTTPRequestHandler):
     # ── LIST ENDPOINTS ───────────────────────────────────────
     def get_lists(self):
         db = get_db()
-        rows = db.execute("SELECT * FROM lists ORDER BY name").fetchall()
+        rows = db.execute("""
+            SELECT lv.*, l.name as list_name FROM list_values lv
+            JOIN lists l ON l.id = lv.list_id
+            WHERE lv.is_active = 1
+            ORDER BY l.name, lv.value
+        """).fetchall()
         db.close()
         self.send_json(rows_to_list(rows))
 
