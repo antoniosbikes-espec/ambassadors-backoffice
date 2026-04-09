@@ -1241,7 +1241,7 @@ class Handler(BaseHTTPRequestHandler):
 # ─────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     init_db()
-    server = http.server.HTTPServer(("", PORT), Server)
+    server = http.server.HTTPServer(("", PORT), Handler)
     print(f"🚀 Server ready at http://localhost:{PORT}")
     try:
         server.serve_forever()
