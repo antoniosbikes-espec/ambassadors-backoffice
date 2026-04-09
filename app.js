@@ -366,6 +366,7 @@ async function renderAmbassadors() {
   tbody.innerHTML = ambassadors.map(a => `
     <tr data-id="${a.id}" class="${selectedAmbassadorId === a.id ? 'selected' : ''}">
       <td><div class="avatar-cell"><div class="table-avatar">${initials(a.first_name + ' ' + (a.last_name||''))}</div>${a.first_name} ${a.last_name||''}</div></td>
+      <td><span style="font-size:12px;color:var(--text-secondary)">${a.phone || '—'}</span></td>
       <td><span class="badge badge-country">${a.country_code || '—'}</span></td>
       <td><span class="badge badge-lang">${a.language_code || '—'}</span></td>
       <td><strong>${a.profile_count || 0}</strong></td>
@@ -420,9 +421,9 @@ async function openAmbassadorDetail(id) {
   document.getElementById('detail-avatar').textContent   = initials(fullName);
   document.getElementById('detail-name').textContent     = fullName;
   document.getElementById('detail-email').textContent    = a.email;
+  document.getElementById('detail-phone').textContent    = a.phone || '';
   document.getElementById('detail-country-badge').textContent = a.country_code || '—';
   document.getElementById('detail-lang-badge').textContent    = a.language_code || '—';
-  document.getElementById('detail-phone').textContent         = a.phone || '';
 
   switchDetailTab('overview');
 }
@@ -850,8 +851,21 @@ async function renderAnalytics() {
   const metricX = document.getElementById('metric-x').value;
   const metricY = document.getElementById('metric-y').value;
 
+  // Filtros globales
+  const qs = {};
+  const country  = document.getElementById('filter-country')?.value;
+  const niche    = document.getElementById('filter-niche')?.value;
+  const platform = document.getElementById('filter-platform')?.value;
+
+  if (country)  qs.country_code = country;
+  if (niche)    qs.niche_code   = niche;
+  if (platform) qs.platform_code = platform;
+
   const [ambassadors, profiles, posts, contracts] = await Promise.all([
-    GET('/ambassadors'), GET('/profiles'), GET('/posts'), GET('/contracts')
+    GET('/ambassadors', qs), 
+    GET('/profiles', qs), 
+    GET('/posts', qs), 
+    GET('/contracts', qs)
   ]).catch(() => [[], [], [], []]);
 
   const groups = buildAnalyticsGroups(ambassadors, profiles, posts, contracts, groupBy);
@@ -862,27 +876,57 @@ async function renderAnalytics() {
 
 function buildAnalyticsGroups(ambassadors, profiles, posts, contracts, groupBy) {
   const map = {};
-  ambassadors.forEach(a => {
-    const ambPosts     = posts.filter(p => p.ambassador_id === a.id);
-    const ambContracts = contracts.filter(c => c.ambassador_id === a.id);
-    const ambProfiles  = profiles.filter(p => p.ambassador_id === a.id);
-    const revenue = ambContracts.reduce((s, c) =>
-      s + ((c.price_per_standard_post||0)*(c.monthly_standard_posts||0) +
-           (c.price_per_top_post||0)*(c.monthly_top_posts||0)) * 12, 0);
+  console.log('Building analytics groups by:', groupBy);
 
-    let key;
-    if (groupBy === 'ambassador') key = a.first_name + ' ' + (a.last_name||'');
-    else if (groupBy === 'country') key = a.country_code || '—';
-    else if (groupBy === 'platform') key = ambProfiles[0]?.platform_code || '—';
-    else key = a.first_name + ' ' + (a.last_name||'');
+  if (['niche', 'platform', 'profile'].includes(groupBy)) {
+    // Agrupar por perfiles individuales para mayor precisión en nichos/plataformas
+    profiles.forEach(p => {
+      const amb = ambassadors.find(a => a.id == p.ambassador_id);
+      if (!amb) return;
 
-    if (!map[key]) map[key] = { label: key, views: 0, posts: 0, scoreSum: 0, scoreCount: 0, revenue: 0 };
-    map[key].views      += ambPosts.reduce((s, p) => s + (p.total_views||0), 0);
-    map[key].posts      += ambPosts.length;
-    map[key].scoreSum   += ambPosts.reduce((s, p) => s + (p.content_score||0), 0);
-    map[key].scoreCount += ambPosts.length;
-    map[key].revenue    += revenue;
-  });
+      const profPosts = posts.filter(po => po.profile_id == p.id);
+      const profContracts = contracts.filter(c => c.profile_id == p.id);
+      const revenue = profContracts.reduce((s, c) =>
+        s + ((c.price_per_standard_post||0)*(c.monthly_standard_posts||0) +
+             (c.price_per_top_post||0)*(c.monthly_top_posts||0)) * 12, 0);
+
+      let key;
+      if (groupBy === 'niche') key = p.niche || p.niche_code || '—';
+      else if (groupBy === 'platform') key = p.platform || p.platform_code || '—';
+      else key = p.handle || p.url || '—';
+
+      if (!map[key]) map[key] = { label: key, views: 0, posts: 0, scoreSum: 0, scoreCount: 0, revenue: 0 };
+      map[key].views      += profPosts.reduce((s, po) => s + (po.total_views||0), 0);
+      map[key].posts      += profPosts.length;
+      map[key].scoreSum   += profPosts.reduce((s, po) => s + (po.content_score||0), 0);
+      map[key].scoreCount += profPosts.length;
+      map[key].revenue    += revenue;
+    });
+  } else {
+    // Agrupar por entidad ambassadors (Embajador o País)
+    ambassadors.forEach(a => {
+      const ambPosts     = posts.filter(p => p.ambassador_id == a.id);
+      const ambContracts = contracts.filter(c => c.ambassador_id == a.id);
+      const ambProfiles  = profiles.filter(p => p.ambassador_id == a.id);
+      const revenue = ambContracts.reduce((s, c) =>
+        s + ((c.price_per_standard_post||0)*(c.monthly_standard_posts||0) +
+             (c.price_per_top_post||0)*(c.monthly_top_posts||0)) * 12, 0);
+
+      let key;
+      if (groupBy === 'country') {
+        key = a.country_code || '—';
+      } else {
+        key = a.first_name + ' ' + (a.last_name||'');
+      }
+
+      if (!map[key]) map[key] = { label: key, views: 0, posts: 0, scoreSum: 0, scoreCount: 0, revenue: 0 };
+      map[key].views      += ambPosts.reduce((s, p) => s + (p.total_views||0), 0);
+      map[key].posts      += ambPosts.length;
+      map[key].scoreSum   += ambPosts.reduce((s, p) => s + (p.content_score||0), 0);
+      map[key].scoreCount += ambPosts.length;
+      map[key].revenue    += revenue;
+    });
+  }
   return Object.values(map).map(g => ({
     ...g, avgScore: g.scoreCount ? g.scoreSum / g.scoreCount : 0
   })).sort((a, b) => b.views - a.views);
@@ -976,7 +1020,7 @@ function renderRevenueTable(rows) {
     <tr>
       <td>${r.views_date}</td>
       <td><span class="badge badge-country">${r.country_code||r.country||'—'}</span></td>
-      <td>${r.currency_code||'—'}</td>
+      <td><span class="badge badge-lang" style="background:var(--accent-purple-alpha)">${r.niche_code||r.niche||'—'}</span></td>
       <td><strong style="color:var(--accent-teal)">${fmt(r.amount,'currency')}</strong></td>
       <td><button class="btn-icon" style="width:auto;padding:4px 10px;font-size:11px" onclick="deleteRevenue(${r.id})">Eliminar</button></td>
     </tr>

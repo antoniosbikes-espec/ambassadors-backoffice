@@ -65,9 +65,9 @@ CREATE TABLE IF NOT EXISTS ambassadors (
     email                TEXT    NOT NULL UNIQUE,
     first_name           TEXT    NOT NULL,
     last_name            TEXT,
+    phone                TEXT,
     primary_language_id  INTEGER REFERENCES list_values(id),
     country_id           INTEGER REFERENCES list_values(id),
-    phone                TEXT,
     notes                TEXT,
     created_at           TEXT    NOT NULL DEFAULT (datetime('now'))
 );
@@ -447,6 +447,14 @@ def init_db():
     conn.executescript(SCHEMA)
     conn.executescript(SEEDS)
     
+    # MIGRACIÓN: Asegurar que existe el campo phone (para entornos ya existentes como Railway)
+    try:
+        conn.execute("ALTER TABLE ambassadors ADD COLUMN phone TEXT;")
+        conn.commit()
+    except:
+        pass # Si ya existe, fallará silenciosamente
+    
+    
     # Solo cargar datos demo de personas si la tabla está totalmente vacía
     count = conn.execute("SELECT COUNT(*) FROM ambassadors").fetchone()[0]
     if count == 0:
@@ -697,6 +705,9 @@ class Handler(BaseHTTPRequestHandler):
         if qs.get('platform_code'):
             where.append('EXISTS (SELECT 1 FROM profiles pf JOIN list_values lv_p ON lv_p.id=pf.platform_id WHERE pf.ambassador_id=a.id AND lv_p.code=?)')
             params.append(qs['platform_code'][0])
+        if qs.get('niche_code'):
+            where.append('EXISTS (SELECT 1 FROM profiles pf JOIN list_values lv_n ON lv_n.id=pf.niche_id WHERE pf.ambassador_id=a.id AND lv_n.code=?)')
+            params.append(qs['niche_code'][0])
         if qs.get('status_code'):
             where.append("""
                 (SELECT lv_s.code FROM contracts c 
@@ -735,10 +746,11 @@ class Handler(BaseHTTPRequestHandler):
         body = self.read_body()
         db = get_db()
         cur = db.execute(
-            "INSERT INTO ambassadors(email,first_name,last_name,primary_language_id,country_id,phone,notes) VALUES(?,?,?,?,?,?,?)",
+            "INSERT INTO ambassadors(email,first_name,last_name,phone,primary_language_id,country_id,notes) VALUES(?,?,?,?,?,?,?)",
             (body.get('email'), body.get('first_name'), body.get('last_name'),
+             body.get('phone'),
              body.get('primary_language_id'), body.get('country_id'),
-             body.get('phone'), body.get('notes'))
+             body.get('notes'))
         )
         db.commit()
         row = db.execute("SELECT * FROM ambassadors WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -748,11 +760,12 @@ class Handler(BaseHTTPRequestHandler):
     def update_ambassador(self, aid):
         body = self.read_body()
         db = get_db()
-        db.execute("""UPDATE ambassadors SET email=?,first_name=?,last_name=?,
-                      primary_language_id=?,country_id=?,phone=?,notes=? WHERE id=?""",
+        db.execute("""UPDATE ambassadors SET email=?,first_name=?,last_name=?,phone=?,
+                      primary_language_id=?,country_id=?,notes=? WHERE id=?""",
                    (body.get('email'), body.get('first_name'), body.get('last_name'),
+                    body.get('phone'),
                     body.get('primary_language_id'), body.get('country_id'),
-                    body.get('phone'), body.get('notes'), aid))
+                    body.get('notes'), aid))
         db.commit()
         row = db.execute("SELECT * FROM ambassadors WHERE id=?", (aid,)).fetchone()
         db.close()
@@ -804,8 +817,12 @@ class Handler(BaseHTTPRequestHandler):
             where.append('p.ambassador_id=?'); params.append(qs['ambassador_id'][0])
         if qs.get('platform_id'):
             where.append('p.platform_id=?'); params.append(qs['platform_id'][0])
+        if qs.get('platform_code'):
+            where.append('lv_plat.code=?'); params.append(qs['platform_code'][0])
         if qs.get('niche_id'):
             where.append('p.niche_id=?'); params.append(qs['niche_id'][0])
+        if qs.get('niche_code'):
+            where.append('lv_niche.code=?'); params.append(qs['niche_code'][0])
         if where:
             sql += ' WHERE ' + ' AND '.join(where)
         sql += ' ORDER BY a.first_name, p.id'
