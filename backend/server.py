@@ -1236,7 +1236,10 @@ class Handler(BaseHTTPRequestHandler):
         top_rows = db.execute(f"""
             SELECT a.id, a.first_name || ' ' || COALESCE(a.last_name,'') AS name,
                    lv_c.code AS country_code,
-                   COALESCE(SUM(pvh.new_views),0) AS total_views
+                   (SELECT lv_p.code FROM profiles p2 JOIN list_values lv_p ON lv_p.id = p2.platform_id WHERE p2.ambassador_id = a.id LIMIT 1) AS platform_code,
+                   (SELECT lv_s.code FROM contracts c2 JOIN list_values lv_s ON lv_s.id = c2.status_id WHERE c2.profile_id IN (SELECT id FROM profiles WHERE ambassador_id = a.id) ORDER BY c2.id DESC LIMIT 1) AS contract_status,
+                   COALESCE(SUM(pvh.new_views),0) AS total_views,
+                   AVG(po.score) as avg_score
             {base_from}
             LEFT JOIN list_values lv_c ON lv_c.id = a.country_id
             LEFT JOIN posts po ON po.profile_id = p.id
