@@ -1051,6 +1051,70 @@ document.querySelectorAll('.main-tabs .tab[data-maintab]').forEach(tab => {
   });
 });
 
+document.getElementById('btn-import-revenue')?.addEventListener('click', () => {
+  openModal('Importar Revenue CSV', `
+    <div style="margin-bottom:15px;font-size:13px;color:var(--text-secondary);line-height:1.5;">
+      Sube un archivo CSV (separado por comas) con el formato:<br><br>
+      <code style="background:var(--bg-secondary);padding:4px 8px;border-radius:4px;">Fecha (YYYY-MM-DD), Código País, Código Moneda, Importe</code><br><br>
+      <small>* La primera fila se omitirá automáticamente si parece una cabecera.</small>
+    </div>
+    <div class="form-group">
+      <input type="file" id="rv-csv-file" accept=".csv" style="width:100%;color:var(--text-primary);padding:10px;background:var(--bg-secondary);border-radius:8px;" />
+    </div>
+  `, async () => {
+    const fileInput = document.getElementById('rv-csv-file');
+    if (!fileInput || !fileInput.files.length) {
+      alert('Por favor, selecciona un archivo CSV.');
+      return false;
+    }
+    
+    try {
+      document.getElementById('modal-confirm').textContent = 'Importando...';
+      const text = await fileInput.files[0].text();
+      const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+      let imported = 0;
+      
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const parts = line.split(',').map(s => s.trim());
+        if (i === 0 && isNaN(Date.parse(parts[0]))) continue; // Omitir cabecera
+        if (parts.length < 4) {
+          if (parts.length < 2) continue; // Al menos fecha e importe (como mínimo absoluto 2)
+        }
+        
+        const dateStr = parts[0];
+        const countryCode = parts[1] || '';
+        const currencyCode = parts[2] || '';
+        const amountStr = parts[3] !== undefined ? parts[3] : parts[parts.length - 1]; // Fallback
+        
+        if (!dateStr || !amountStr) continue;
+        
+        const country = (LISTS.country || []).find(c => c.code && c.code.toUpperCase() === countryCode.toUpperCase());
+        const currency = (LISTS.currency || []).find(c => c.code && c.code.toUpperCase() === currencyCode.toUpperCase());
+        
+        await POST('/revenues', {
+          views_date: dateStr,
+          country_id: country ? country.id : null,
+          currency_id: currency ? currency.id : null,
+          amount: parseFloat(amountStr) || 0
+        }).catch(e => console.error('Error importando fila:', e));
+        
+        imported++;
+      }
+      
+      alert('Importación completada: ' + imported + ' registros añadidos.');
+      document.getElementById('modal-confirm').textContent = 'Guardar';
+      renderRevenue();
+      return true;
+    } catch (e) {
+      console.error(e);
+      alert('Error procesando el archivo CSV:\n' + e.message);
+      document.getElementById('modal-confirm').textContent = 'Guardar';
+      return false;
+    }
+  });
+});
+
 document.getElementById('btn-add-revenue').addEventListener('click', () => {
   openModal('Añadir Revenue Real', `
     <div class="form-row">
