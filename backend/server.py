@@ -1209,16 +1209,16 @@ class Handler(BaseHTTPRequestHandler):
         """, params).fetchone()[0]
 
         # 2. Tendencia de Views
-        # Aquí es donde fallaba el AND
         trend_conds = ["pvh.views_date >= date('now', ?)"]
         w_sql_t, _ = build_where(trend_conds)
+        # El parámetro de la fecha va al FINAL porque trend_conds se añade al final de where_parts
         trend_rows = db.execute(f"""
             SELECT pvh.views_date, SUM(pvh.new_views) AS views {base_from}
             JOIN posts po ON po.profile_id = p.id
             JOIN post_views_history pvh ON pvh.post_id = po.id
             {w_sql_t}
             GROUP BY pvh.views_date ORDER BY pvh.views_date
-        """, [f'-{days} days'] + params).fetchall()
+        """, params + [f'-{days} days']).fetchall()
         trend = [dict(r) for r in trend_rows]
 
         # 3. Distribución por plataforma
