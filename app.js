@@ -18,6 +18,35 @@ let filteredAmbassadors = [];
 // ─── Bootstrap ───────────────────────────────────────────────
 async function init() {
   await loadLists();
+  
+  // Rellenar filtros principales (usando códigos para la búsqueda)
+  const filterCountry  = document.getElementById('amb-filter-country');
+  const filterPlatform = document.getElementById('amb-filter-platform');
+  const filterStatus   = document.getElementById('amb-filter-status');
+  
+  if (filterCountry)  filterCountry.innerHTML  = listCodeOptions('country', '— País —');
+  if (filterPlatform) filterPlatform.innerHTML = listCodeOptions('platform', '— Plataforma —');
+  if (filterStatus)   filterStatus.innerHTML   = listCodeOptions('contract_status', '— Estado —');
+
+  // Rellenar filtros globales (Cabecera)
+  const gCountry  = document.getElementById('filter-country');
+  const gNiche    = document.getElementById('filter-niche');
+  const gPlatform = document.getElementById('filter-platform');
+
+  if (gCountry)  gCountry.innerHTML  = listCodeOptions('country', 'Todos los países');
+  if (gNiche)    gNiche.innerHTML    = listCodeOptions('niche', 'Todos los nichos');
+  if (gPlatform) gPlatform.innerHTML = listCodeOptions('platform', 'Todas las plataformas');
+
+  // Listeners para filtros globales
+  ['filter-date', 'filter-country', 'filter-niche', 'filter-platform'].forEach(id => {
+    document.getElementById(id)?.addEventListener('change', () => {
+      // Refrescar página actual si es dashboard o analytics
+      const activePage = document.querySelector('.page.active').id;
+      if (activePage === 'page-dashboard') renderDashboard();
+      if (activePage === 'page-analytics') renderAnalytics();
+    });
+  });
+
   renderDashboard();
   navigateTo('dashboard');
 }
@@ -77,6 +106,12 @@ function listOptions(name, placeholder = '') {
   const items = LISTS[name] || [];
   const ph = placeholder ? `<option value="">${placeholder}</option>` : '';
   return ph + items.map(lv => `<option value="${lv.id}">${lv.value}</option>`).join('');
+}
+
+function listCodeOptions(name, placeholder = '') {
+  const items = LISTS[name] || [];
+  const ph = placeholder ? `<option value="">${placeholder}</option>` : '';
+  return ph + items.map(lv => `<option value="${lv.code}">${lv.value}</option>`).join('');
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -192,7 +227,18 @@ function yAxis(fmt_type) {
 // DASHBOARD
 // ─────────────────────────────────────────────────────────────
 async function renderDashboard() {
-  const data = await GET('/dashboard').catch(() => null);
+  const qs = {};
+  const days = document.getElementById('filter-date')?.value || '30';
+  const country = document.getElementById('filter-country')?.value;
+  const niche = document.getElementById('filter-niche')?.value;
+  const platform = document.getElementById('filter-platform')?.value;
+
+  if (days) qs.days = days;
+  if (country) qs.country_code = country;
+  if (niche) qs.niche_code = niche;
+  if (platform) qs.platform_code = platform;
+
+  const data = await GET('/dashboard', qs).catch(() => null);
   if (!data) return;
 
   // KPI counters animation

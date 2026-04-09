@@ -1145,39 +1145,69 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json({'deleted': rid})
 
     # ── DASHBOARD (agregado) ─────────────────────────────────
-    def get_dashboard(self):
-        db = get_db()
-        total_ambassadors = db.execute("SELECT COUNT(*) FROM ambassadors").fetchone()[0]
-        total_profiles    = db.execute("SELECT COUNT(*) FROM profiles").fetchone()[0]
-        signed_contracts  = db.execute("""
-            SELECT COUNT(*) FROM contracts c
-            JOIN list_values lv ON lv.id=c.status_id WHERE lv.code='signed'
-        """).fetchone()[0]
-        total_views = db.execute("SELECT COALESCE(SUM(new_views),0) FROM post_views_history").fetchone()[0]
-        expected_revenue = db.execute("""
-            SELECT COALESCE(SUM(
-              COALESCE(price_per_standard_post,0)*COALESCE(monthly_standard_posts,0) +
-              COALESCE(price_per_top_post,0)*COALESCE(monthly_top_posts,0)
-            ),0) FROM contracts c
-            JOIN list_values lv ON lv.id=c.status_id WHERE lv.code='signed'
-        """).fetchone()[0]
-        real_revenue = db.execute("SELECT COALESCE(SUM(amount),0) FROM revenues").fetchone()[0]
+    def get_dashboard(self, qs=None):
+        where_a = [] # para embajadores
+        where_p = [] # para perfiles/posts
+        params = []
+        days = '30'
+        
+        if qs:
+            if qs.get('country_code'):
+                where_a.append('a.country_id = (SELECT id FROM list_values WHERE code=?)')
+                params.append(qs['country_code'][0])
+            if qs.get('niche_code'):
+                where_p.append('p.niche_id = (SELECT id FROM list_values WHERE code=?)')
+                params.append(qs['niche_code'][0])
+            if qs.get('platform_code'):
+                where_p.append('p.platform_id = (SELECT id FROM list_values WHERE code=?)')
+                params.append(qs['platform_code'][0])
+            if qs.get('days'):
+                days = qs['days'][0]
 
-        # Views trend (last 30 days from post_views_history)
-        trend = db.execute("""
-            SELECT views_date, SUM(new_views) AS views
-            FROM post_views_history
-            WHERE views_date >= date('now','-30 days')
-            GROUP BY views_date ORDER BY views_date
-        """).fetchall()
+        w_a = (" WHERE " + " AND ".join(where_a)) if where_a else ""
+        w_p = (" AND " + " AND ".join(where_p)) if where_p else ""
+
+        db = get_db()
+        total_ambassadors = db.execute(f"SELECT COUNT(*) FROM ambassadors a {w_a}", params).fetchone()[0]
+        total_profiles    = db.execute(f"SELECT COUNT(*) FROM profiles p JOIN ambassadors a ON a.id=p.ambassador_id {w_a} {w_p}", params + params[-2:] if where_p else params).fetchone()[0]
+        
+        # Simplificamos para el dashboard: usamos los mismos filtros en las queries principales
+        signed_contracts  = db.execute(f"""
+            SELECT COUNT(*) FROM contracts c
+            JOIN profiles p ON p.id=c.profile_id
+            JOIN ambassadors a ON a.id=p.ambassador_id
+            JOIN list_values lv ON lv.id=c.status_id 
+            WHERE lv.code='signed' {w_a.replace('WHERE','AND')} {w_p}
+        """, params * 2 if where_p else params).fetchone()[0]
+        
+        total_views = db.execute(f"""
+            SELECT COALESCE(SUM(pvh.new_views),0) FROM post_views_history pvh
+            JOIN posts po ON po.id=pvh.post_id
+            JOIN profiles p ON p.id=po.profile_id
+            JOIN ambassadors a ON a.id=p.ambassador_id
+            {w_a} {w_p}
+        """, params * 2 if where_p else params).fetchone()[0]
+
+        # Views trend (respetando los días seleccionados)
+        trend = db.execute(f"""
+            SELECT pvh.views_date, SUM(pvh.new_views) AS views
+            FROM post_views_history pvh
+            JOIN posts po ON po.id=pvh.post_id
+            JOIN profiles p ON p.id=po.profile_id
+            JOIN ambassadors a ON a.id=p.ambassador_id
+            WHERE pvh.views_date >= date('now',?) {w_a.replace('WHERE','AND')} {w_p}
+            GROUP BY pvh.views_date ORDER BY pvh.views_date
+        """, [f'-{days} days'] + (params * 2 if where_p else params)).fetchall()
 
         # Platform split
-        platform_split = db.execute("""
+        platform_split = db.execute(f"""
             SELECT lv.value AS platform, COUNT(DISTINCT p.id) AS count
             FROM profiles p
+            JOIN ambassadors a ON a.id=p.ambassador_id
             JOIN list_values lv ON lv.id=p.platform_id
+            {w_a} {w_p}
             GROUP BY p.platform_id
-        """).fetchall()
+        """, params * 2 if where_p else params).fetchall()
 
         # Top ambassadors
         top = db.execute("""
