@@ -1154,13 +1154,13 @@ class Handler(BaseHTTPRequestHandler):
         if qs:
             print(f"📊 Dashboard Request Params: {qs}")
             if qs.get('country_code') and qs['country_code'][0]:
-                where_parts.append('a.country_id = (SELECT id FROM list_values WHERE code=?)')
+                where_parts.append('a.country_id = (SELECT id FROM list_values WHERE UPPER(code)=UPPER(?))')
                 params.append(qs['country_code'][0])
             if qs.get('niche_code') and qs['niche_code'][0]:
-                where_parts.append('p.niche_id = (SELECT id FROM list_values WHERE code=?)')
+                where_parts.append('p.niche_id = (SELECT id FROM list_values WHERE UPPER(code)=UPPER(?))')
                 params.append(qs['niche_code'][0])
             if qs.get('platform_code') and qs['platform_code'][0]:
-                where_parts.append('p.platform_id = (SELECT id FROM list_values WHERE code=?)')
+                where_parts.append('p.platform_id = (SELECT id FROM list_values WHERE UPPER(code)=UPPER(?))')
                 params.append(qs['platform_code'][0])
             if qs.get('days'):
                 days = qs['days'][0]
