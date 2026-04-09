@@ -1197,7 +1197,27 @@ class Handler(BaseHTTPRequestHandler):
             JOIN contracts c ON c.profile_id = p.id
             JOIN list_values lv_s ON lv_s.id = c.status_id
             {w_sql_s}
-        """, params).fetchone()[0]
+        """, params).fetchone()[0] or 0
+
+        # Revenue Esperado (basado en contratos firmados)
+        expected_revenue = db.execute(f"""
+            SELECT SUM((c.price_per_standard_post * c.monthly_standard_posts) + 
+                       (c.price_per_top_post * c.monthly_top_posts))
+            {base_from}
+            JOIN contracts c ON c.profile_id = p.id
+            JOIN list_values lv_s ON lv_s.id = c.status_id
+            {w_sql_s}
+        """, params).fetchone()[0] or 0
+
+        # Revenue Real (basado en tabla revenues y fechas)
+        rev_where_parts = ["r.views_date >= date('now', ?)"]
+        rev_params = [f'-{days} days']
+        if qs and qs.get('country_code') and qs['country_code'][0]:
+            rev_where_parts.append('r.country_id = (SELECT id FROM list_values WHERE UPPER(code)=UPPER(?))')
+            rev_params.append(qs['country_code'][0])
+        
+        rev_where = " WHERE " + " AND ".join(rev_where_parts)
+        real_revenue = db.execute(f"SELECT SUM(amount) FROM revenues r {rev_where}", rev_params).fetchone()[0] or 0
         
         # Views totales
         w_sql_v, _ = build_where()
@@ -1206,7 +1226,7 @@ class Handler(BaseHTTPRequestHandler):
             JOIN posts po ON po.profile_id = p.id
             JOIN post_views_history pvh ON pvh.post_id = po.id
             {w_sql_v}
-        """, params).fetchone()[0]
+        """, params).fetchone()[0] or 0
 
         # 2. Tendencia de Views
         trend_conds = ["pvh.views_date >= date('now', ?)"]
@@ -1255,7 +1275,9 @@ class Handler(BaseHTTPRequestHandler):
                 'total_ambassadors': total_ambassadors,
                 'total_profiles': total_profiles,
                 'signed_contracts': signed_contracts,
-                'total_views': total_views
+                'total_views': total_views,
+                'expected_revenue': expected_revenue,
+                'real_revenue': real_revenue
             },
             'trend': trend,
             'platform_split': platform_split,
