@@ -1227,10 +1227,12 @@ class Handler(BaseHTTPRequestHandler):
         
         db.close()
         self.send_json({
-            'total_ambassadors': total_ambassadors,
-            'total_profiles': total_profiles,
-            'signed_contracts': signed_contracts,
-            'total_views': total_views,
+            'kpis': {
+                'total_ambassadors': total_ambassadors,
+                'total_profiles': total_profiles,
+                'signed_contracts': signed_contracts,
+                'total_views': total_views
+            },
             'trend': trend,
             'platform_split': platform_split,
             'top_ambassadors': top
