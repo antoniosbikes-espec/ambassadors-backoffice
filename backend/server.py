@@ -5,6 +5,7 @@ Python 3 + SQLite (stdlib only, no pip required)
 """
 
 import sqlite3, json, os, sys, re
+import http.server
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime, timezone
 from urllib.parse import urlparse, parse_qs
