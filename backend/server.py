@@ -1235,53 +1235,15 @@ class Handler(BaseHTTPRequestHandler):
             'top_ambassadors': top
         })
 
-        # Top ambassadors
-        top = db.execute("""
-            SELECT a.id, a.first_name || ' ' || COALESCE(a.last_name,'') AS name,
-              lv_c.code AS country_code,
-              lv_l.code AS lang_code,
-              lv_plat.code AS platform_code,
-              COALESCE(SUM(pvh.new_views),0) AS total_views,
-              COALESCE(AVG(po.content_score),0) AS avg_score,
-              (SELECT lv2.code FROM contracts c2
-               JOIN profiles p2 ON p2.id=c2.profile_id
-               JOIN list_values lv2 ON lv2.id=c2.status_id
-               WHERE p2.ambassador_id=a.id ORDER BY c2.created_at DESC LIMIT 1) AS contract_status
-            FROM ambassadors a
-            LEFT JOIN list_values lv_c    ON lv_c.id    = a.country_id
-            LEFT JOIN list_values lv_l    ON lv_l.id    = a.primary_language_id
-            LEFT JOIN profiles p          ON p.ambassador_id = a.id
-            LEFT JOIN list_values lv_plat ON lv_plat.id = p.platform_id
-            LEFT JOIN posts po            ON po.profile_id = p.id
-            LEFT JOIN post_views_history pvh ON pvh.post_id = po.id
-            GROUP BY a.id ORDER BY total_views DESC LIMIT 6
-        """).fetchall()
-
-        db.close()
-        self.send_json({
-            'kpis': {
-                'total_ambassadors': total_ambassadors,
-                'total_profiles':    total_profiles,
-                'signed_contracts':  signed_contracts,
-                'total_views':       total_views,
-                'expected_revenue':  round(expected_revenue, 2),
-                'real_revenue':      round(real_revenue, 2),
-            },
-            'views_trend':    rows_to_list(trend),
-            'platform_split': rows_to_list(platform_split),
-            'top_ambassadors': rows_to_list(top),
-        })
-
-
 # ─────────────────────────────────────────────────────────────
-# ENTRY POINT
+# RUN
 # ─────────────────────────────────────────────────────────────
-if __name__ == '__main__':
+if __name__ == "__main__":
     init_db()
-    server = HTTPServer(('0.0.0.0', PORT), Handler)
-    print(f"[SERVER] Ambassadors API running at http://0.0.0.0:{PORT}")
-    print(f"[SERVER] Press Ctrl+C to stop")
+    server = http.server.HTTPServer(("", PORT), Server)
+    print(f"🚀 Server ready at http://localhost:{PORT}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\n[SERVER] Stopped.")
+        print("\nStopping...")
+        server.server_close()
