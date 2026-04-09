@@ -683,14 +683,24 @@ class Handler(BaseHTTPRequestHandler):
             LEFT JOIN list_values lv_country ON lv_country.id = a.country_id
         """
         params = []
-        where = []
-        if qs.get('country_id'):
-            where.append('a.country_id = ?'); params.append(qs['country_id'][0])
-        if qs.get('language_id'):
-            where.append('a.primary_language_id = ?'); params.append(qs['language_id'][0])
+        where  = []
+        if qs.get('country_code'):
+            where.append('lv_country.code = ?'); params.append(qs['country_code'][0])
+        if qs.get('platform_code'):
+            where.append('EXISTS (SELECT 1 FROM profiles pf JOIN list_values lv_p ON lv_p.id=pf.platform_id WHERE pf.ambassador_id=a.id AND lv_p.code=?)')
+            params.append(qs['platform_code'][0])
+        if qs.get('status_code'):
+            where.append("""
+                (SELECT lv_s.code FROM contracts c 
+                 JOIN profiles p2 ON p2.id=c.profile_id 
+                 JOIN list_values lv_s ON lv_s.id=c.status_id 
+                 WHERE p2.ambassador_id=a.id ORDER BY c.created_at DESC LIMIT 1) = ?
+            """)
+            params.append(qs['status_code'][0])
         if qs.get('search'):
             where.append("(a.first_name || ' ' || COALESCE(a.last_name,'') || ' ' || a.email LIKE ?)")
             params.append(f'%{qs["search"][0]}%')
+        
         if where:
             sql += ' WHERE ' + ' AND '.join(where)
         sql += ' ORDER BY a.first_name'

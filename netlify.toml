@@ -1,6 +1,10 @@
 # ── Netlify config ────────────────────────────────────────────
 [build]
+  command = ""
   publish = "."
+
+[build.environment]
+  PYTHON_VERSION = ""
 
 # Redirigir todas las rutas al index.html (SPA)
 [[redirects]]

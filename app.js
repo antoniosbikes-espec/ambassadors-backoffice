@@ -44,7 +44,11 @@ async function api(method, endpoint, body) {
   }
 }
 
-const GET    = (ep, qs) => api('GET',    qs ? `${ep}?${new URLSearchParams(qs)}` : ep);
+const GET    = (ep, qs) => {
+  const params = new URLSearchParams(qs || {});
+  params.set('_t', Date.now()); // Forzar datos frescos
+  return api('GET', `${ep}?${params.toString()}`);
+};
 const POST   = (ep, b)  => api('POST',   ep, b);
 const PUT    = (ep, b)  => api('PUT',    ep, b);
 const DELETE = (ep)     => api('DELETE', ep);
@@ -324,9 +328,14 @@ function buildAmbassadorFilters() {
   const qs = {};
   const search   = document.getElementById('ambassador-search')?.value.trim();
   const country  = document.getElementById('amb-filter-country')?.value;
+  const platform = document.getElementById('amb-filter-platform')?.value;
   const status   = document.getElementById('amb-filter-status')?.value;
-  if (search)  qs.search = search;
-  // platform filter needs join — done client-side if needed
+
+  if (search)   qs.search = search;
+  if (country)  qs.country_code = country;
+  if (platform) qs.platform_code = platform;
+  if (status)   qs.status_code = status;
+  
   return Object.keys(qs).length ? qs : null;
 }
 
@@ -540,6 +549,45 @@ document.getElementById('btn-new-ambassador').addEventListener('click', () => {
     renderAmbassadors();
     return true;
   });
+});
+
+document.getElementById('btn-edit-ambassador').addEventListener('click', async () => {
+  if (!selectedAmbassadorId) return;
+  const a = await GET(`/ambassadors/${selectedAmbassadorId}`).catch(() => null);
+  if (!a) return;
+
+  openModal('Editar embajador', `
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Nombre *</label><input type="text" id="ef-name" value="${a.first_name}" /></div>
+      <div class="form-group"><label class="form-label">Apellido</label><input type="text" id="ef-last" value="${a.last_name||''}" /></div>
+    </div>
+    <div class="form-group"><label class="form-label">Email *</label><input type="email" id="ef-email" value="${a.email}" /></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">País</label><select id="ef-country" class="filter-select" style="width:100%">${listOptions('country','— País —', a.country_id)}</select></div>
+      <div class="form-group"><label class="form-label">Idioma</label><select id="ef-lang" class="filter-select" style="width:100%">${listOptions('language','— Idioma —', a.primary_language_id)}</select></div>
+    </div>
+  `, async () => {
+    const first_name = document.getElementById('ef-name').value.trim();
+    const last_name  = document.getElementById('ef-last').value.trim();
+    const email      = document.getElementById('ef-email').value.trim();
+    const country_id = document.getElementById('ef-country').value || null;
+    const lang_id    = document.getElementById('ef-lang').value || null;
+    if (!first_name || !email) { alert('Nombre y email son obligatorios'); return false; }
+    await PUT(`/ambassadors/${selectedAmbassadorId}`, { email, first_name, last_name, country_id, primary_language_id: lang_id });
+    renderAmbassadors();
+    openAmbassadorDetail(selectedAmbassadorId);
+    return true;
+  });
+});
+
+document.getElementById('btn-delete-ambassador').addEventListener('click', async () => {
+  if (!selectedAmbassadorId) return;
+  if (!confirm('¿Seguro que quieres eliminar este embajador? Se borrarán todos sus perfiles y contratos.')) return;
+  await DELETE(`/ambassadors/${selectedAmbassadorId}`);
+  selectedAmbassadorId = null;
+  document.getElementById('detail-empty').style.display = 'flex';
+  document.getElementById('detail-content').style.display = 'none';
+  renderAmbassadors();
 });
 
 document.getElementById('btn-add-profile').addEventListener('click', () => {
