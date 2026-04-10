@@ -682,7 +682,7 @@ class Handler(BaseHTTPRequestHandler):
     def get_ambassadors(self, qs={}):
         db = get_db()
         sql = """
-            SELECT a.*,
+            SELECT a.id, a.email, a.first_name, a.last_name, a.primary_language_id, a.country_id, a.notes, a.created_at,
               lv_lang.value  AS language,
               lv_lang.code   AS language_code,
               lv_country.value AS country,
@@ -730,7 +730,7 @@ class Handler(BaseHTTPRequestHandler):
     def get_ambassador(self, aid):
         db = get_db()
         row = db.execute("""
-            SELECT a.*,
+            SELECT a.id, a.email, a.first_name, a.last_name, a.primary_language_id, a.country_id, a.notes, a.created_at,
               lv_lang.value  AS language, lv_lang.code AS language_code,
               lv_country.value AS country, lv_country.code AS country_code
             FROM ambassadors a
@@ -746,9 +746,8 @@ class Handler(BaseHTTPRequestHandler):
         body = self.read_body()
         db = get_db()
         cur = db.execute(
-            "INSERT INTO ambassadors(email,first_name,last_name,phone,primary_language_id,country_id,notes) VALUES(?,?,?,?,?,?,?)",
+            "INSERT INTO ambassadors(email,first_name,last_name,primary_language_id,country_id,notes) VALUES(?,?,?,?,?,?)",
             (body.get('email'), body.get('first_name'), body.get('last_name'),
-             body.get('phone'),
              body.get('primary_language_id'), body.get('country_id'),
              body.get('notes'))
         )
@@ -760,10 +759,9 @@ class Handler(BaseHTTPRequestHandler):
     def update_ambassador(self, aid):
         body = self.read_body()
         db = get_db()
-        db.execute("""UPDATE ambassadors SET email=?,first_name=?,last_name=?,phone=?,
+        db.execute("""UPDATE ambassadors SET email=?,first_name=?,last_name=?,
                       primary_language_id=?,country_id=?,notes=? WHERE id=?""",
                    (body.get('email'), body.get('first_name'), body.get('last_name'),
-                    body.get('phone'),
                     body.get('primary_language_id'), body.get('country_id'),
                     body.get('notes'), aid))
         db.commit()

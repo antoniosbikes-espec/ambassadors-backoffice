@@ -115,10 +115,13 @@ function listByCode(name, code) {
   return (LISTS[name] || []).find(lv => lv.code === code) || null;
 }
 
-function listOptions(name, placeholder = '') {
+function listOptions(name, placeholder = '', selectedValue = null) {
   const items = LISTS[name] || [];
   const ph = placeholder ? `<option value="">${placeholder}</option>` : '';
-  return ph + items.map(lv => `<option value="${lv.id}">${lv.value}</option>`).join('');
+  return ph + items.map(lv => {
+    const selected = String(lv.id) === String(selectedValue) ? 'selected' : '';
+    return `<option value="${lv.id}" ${selected}>${lv.value}</option>`;
+  }).join('');
 }
 
 function listCodeOptions(name, placeholder = '') {
@@ -366,7 +369,6 @@ async function renderAmbassadors() {
   tbody.innerHTML = ambassadors.map(a => `
     <tr data-id="${a.id}" class="${selectedAmbassadorId === a.id ? 'selected' : ''}">
       <td><div class="avatar-cell"><div class="table-avatar">${initials(a.first_name + ' ' + (a.last_name||''))}</div>${a.first_name} ${a.last_name||''}</div></td>
-      <td><span style="font-size:12px;color:var(--text-secondary)">${a.phone || '—'}</span></td>
       <td><span class="badge badge-country">${a.country_code || '—'}</span></td>
       <td><span class="badge badge-lang">${a.language_code || '—'}</span></td>
       <td><strong>${a.profile_count || 0}</strong></td>
@@ -383,7 +385,7 @@ async function renderAmbassadors() {
     });
   });
 
-  if (selectedAmbassadorId) openAmbassadorDetail(selectedAmbassadorId);
+  if (selectedAmbassadorId) await openAmbassadorDetail(selectedAmbassadorId);
 }
 
 function buildAmbassadorFilters() {
@@ -421,7 +423,6 @@ async function openAmbassadorDetail(id) {
   document.getElementById('detail-avatar').textContent   = initials(fullName);
   document.getElementById('detail-name').textContent     = fullName;
   document.getElementById('detail-email').textContent    = a.email;
-  document.getElementById('detail-phone').textContent    = a.phone || '';
   document.getElementById('detail-country-badge').textContent = a.country_code || '—';
   document.getElementById('detail-lang-badge').textContent    = a.language_code || '—';
 
@@ -600,7 +601,6 @@ document.getElementById('btn-new-ambassador').addEventListener('click', () => {
     </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Email *</label><input type="email" id="nf-email" placeholder="email@ejemplo.com" /></div>
-      <div class="form-group"><label class="form-label">Teléfono</label><input type="text" id="nf-phone" placeholder="+34 000 000 000" /></div>
     </div>
     <div class="form-group"><label class="form-label">Notas</label><textarea id="nf-notes" rows="2" placeholder="Notas sobre el embajador..."></textarea></div>
     <div class="form-row">
@@ -611,14 +611,19 @@ document.getElementById('btn-new-ambassador').addEventListener('click', () => {
     const first_name = document.getElementById('nf-name').value.trim();
     const last_name  = document.getElementById('nf-last').value.trim();
     const email      = document.getElementById('nf-email').value.trim();
-    const phone      = document.getElementById('nf-phone').value.trim();
     const notes      = document.getElementById('nf-notes').value.trim();
     const country_id = document.getElementById('nf-country').value || null;
     const lang_id    = document.getElementById('nf-lang').value || null;
     if (!first_name || !email) { alert('Nombre y email son obligatorios'); return false; }
-    await POST('/ambassadors', { email, first_name, last_name, country_id, primary_language_id: lang_id, phone, notes });
-    renderAmbassadors();
-    return true;
+    try {
+      const res = await POST('/ambassadors', { email, first_name, last_name, country_id, primary_language_id: lang_id, notes });
+      if (res && res.id) selectedAmbassadorId = res.id;
+      await renderAmbassadors();
+      return true;
+    } catch (e) {
+      alert('Error al guardar: ' + e.message);
+      return false;
+    }
   });
 });
 
@@ -634,7 +639,6 @@ document.getElementById('btn-edit-ambassador').addEventListener('click', async (
     </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Email *</label><input type="email" id="ef-email" value="${a.email}" /></div>
-      <div class="form-group"><label class="form-label">Teléfono</label><input type="text" id="ef-phone" value="${a.phone || ''}" placeholder="+34 000 000 000" /></div>
     </div>
     <div class="form-group"><label class="form-label">Notas</label><textarea id="ef-notes" rows="2" placeholder="Notas sobre el embajador...">${a.notes || ''}</textarea></div>
     <div class="form-row">
@@ -645,16 +649,19 @@ document.getElementById('btn-edit-ambassador').addEventListener('click', async (
     const first_name = document.getElementById('ef-name').value.trim();
     const last_name  = document.getElementById('ef-last').value.trim();
     const email      = document.getElementById('ef-email').value.trim();
-    const phone      = document.getElementById('ef-phone').value.trim();
     const notes      = document.getElementById('ef-notes').value.trim();
     const country_id = document.getElementById('ef-country').value || null;
     const lang_id    = document.getElementById('ef-lang').value || null;
     
     if (!first_name || !email) { alert('Nombre y email son obligatorios'); return false; }
-    await PUT(`/ambassadors/${selectedAmbassadorId}`, { email, first_name, last_name, country_id, primary_language_id: lang_id, phone, notes });
-    renderAmbassadors();
-    openAmbassadorDetail(selectedAmbassadorId);
-    return true;
+    try {
+      await PUT(`/ambassadors/${selectedAmbassadorId}`, { email, first_name, last_name, country_id, primary_language_id: lang_id, notes });
+      await renderAmbassadors();
+      return true;
+    } catch (e) {
+      alert('Error al guardar: ' + e.message);
+      return false;
+    }
   });
 });
 
@@ -683,10 +690,15 @@ document.getElementById('btn-add-profile').addEventListener('click', () => {
     const url         = document.getElementById('ap-url').value.trim();
     const niche_id    = document.getElementById('ap-niche').value || null;
     if (!url || !platform_id) { alert('Plataforma y URL son obligatorios'); return false; }
-    await POST('/profiles', { ambassador_id: selectedAmbassadorId, platform_id, handle, url, niche_id });
-    renderDetailProfiles();
-    renderAmbassadors();
-    return true;
+    try {
+      await POST('/profiles', { ambassador_id: selectedAmbassadorId, platform_id, handle, url, niche_id });
+      await renderDetailProfiles();
+      await renderAmbassadors();
+      return true;
+    } catch (e) {
+      alert('Error al guardar: ' + e.message);
+      return false;
+    }
   });
 });
 
@@ -728,11 +740,16 @@ document.getElementById('btn-add-contract').addEventListener('click', async () =
     const signing_at              = document.getElementById('ac-sign').value || null;
     const end_at                  = document.getElementById('ac-end').value || null;
     if (!profile_id || !status_id) { alert('Perfil y estado son obligatorios'); return false; }
-    await POST('/contracts', { profile_id, status_id, currency_id,
-      price_per_standard_post, monthly_standard_posts,
-      price_per_top_post, monthly_top_posts, signing_at, end_at });
-    renderDetailContracts();
-    return true;
+    try {
+      await POST('/contracts', { profile_id, status_id, currency_id,
+        price_per_standard_post, monthly_standard_posts,
+        price_per_top_post, monthly_top_posts, signing_at, end_at });
+      await renderDetailContracts();
+      return true;
+    } catch (e) {
+      alert('Error al guardar: ' + e.message);
+      return false;
+    }
   });
 });
 
@@ -763,12 +780,17 @@ function openNewPostModal() {
       const content_score   = parseFloat(document.getElementById('nc-score').value) || null;
       const mention_offset  = parseInt(document.getElementById('nc-offset').value) || 0;
       if (!url) { alert('URL es obligatoria'); return false; }
-      const post = await POST('/posts', { profile_id, url, mention_type_id, published_at, content_score, mention_offset });
-      if (views > 0) {
-        await POST('/post_views', { post_id: post.id, views_date: published_at || new Date().toISOString().slice(0,10), new_views: views });
+      try {
+        const post = await POST('/posts', { profile_id, url, mention_type_id, published_at, content_score, mention_offset });
+        if (views > 0) {
+          await POST('/post_views', { post_id: post.id, views_date: published_at || new Date().toISOString().slice(0,10), new_views: views });
+        }
+        await renderDetailContent();
+        return true;
+      } catch (e) {
+        alert('Error al guardar: ' + e.message);
+        return false;
       }
-      renderDetailContent();
-      return true;
     });
   });
 }
@@ -833,12 +855,17 @@ document.getElementById('btn-new-post').addEventListener('click', () => {
       const views           = parseInt(document.getElementById('np-views').value) || 0;
       const content_score   = parseFloat(document.getElementById('np-score').value) || null;
       if (!url || !profile_id) { alert('Perfil y URL son obligatorios'); return false; }
-      const post = await POST('/posts', { profile_id, url, mention_type_id, published_at, content_score, mention_offset: 0 });
-      if (views > 0) {
-        await POST('/post_views', { post_id: post.id, views_date: published_at || new Date().toISOString().slice(0,10), new_views: views });
+      try {
+        const post = await POST('/posts', { profile_id, url, mention_type_id, published_at, content_score, mention_offset: 0 });
+        if (views > 0) {
+          await POST('/post_views', { post_id: post.id, views_date: published_at || new Date().toISOString().slice(0,10), new_views: views });
+        }
+        await renderPosts();
+        return true;
+      } catch (e) {
+        alert('Error al guardar: ' + e.message);
+        return false;
       }
-      renderPosts();
-      return true;
     });
   });
 });
@@ -1126,14 +1153,19 @@ document.getElementById('btn-add-revenue').addEventListener('click', () => {
       <div class="form-group"><label class="form-label">Importe</label><input type="number" id="rv-amount" placeholder="0.00" min="0" step="0.01" /></div>
     </div>
   `, async () => {
-    await POST('/revenues', {
-      views_date:  document.getElementById('rv-date').value,
-      country_id:  parseInt(document.getElementById('rv-country').value),
-      currency_id: parseInt(document.getElementById('rv-currency').value) || null,
-      amount:      parseFloat(document.getElementById('rv-amount').value) || 0,
-    });
-    renderRevenue();
-    return true;
+    try {
+      await POST('/revenues', {
+        views_date:  document.getElementById('rv-date').value,
+        country_id:  parseInt(document.getElementById('rv-country').value),
+        currency_id: parseInt(document.getElementById('rv-currency').value) || null,
+        amount:      parseFloat(document.getElementById('rv-amount').value) || 0,
+      });
+      await renderRevenue();
+      return true;
+    } catch (e) {
+      alert('Error al guardar: ' + e.message);
+      return false;
+    }
   });
 });
 
@@ -1148,14 +1180,19 @@ document.getElementById('btn-add-rpu').addEventListener('click', () => {
       <div class="form-group"><label class="form-label">RPU (€/view)</label><input type="number" id="rp-rpu" placeholder="0.0200" min="0" step="0.0001" /></div>
     </div>
   `, async () => {
-    await POST('/rpus', {
-      views_date: document.getElementById('rp-date').value,
-      country_id: parseInt(document.getElementById('rp-country').value),
-      niche_id:   parseInt(document.getElementById('rp-niche').value),
-      rpu:        parseFloat(document.getElementById('rp-rpu').value) || 0,
-    });
-    renderRevenue();
-    return true;
+    try {
+      await POST('/rpus', {
+        views_date: document.getElementById('rp-date').value,
+        country_id: parseInt(document.getElementById('rp-country').value),
+        niche_id:   parseInt(document.getElementById('rp-niche').value),
+        rpu:        parseFloat(document.getElementById('rp-rpu').value) || 0,
+      });
+      await renderRevenue();
+      return true;
+    } catch (e) {
+      alert('Error al guardar: ' + e.message);
+      return false;
+    }
   });
 });
 
@@ -1212,10 +1249,15 @@ window.deleteListValue = async (id, listName) => {
       const list = LISTS[key]?.[0];
       const listId = list?.list_id;
       if (!listId) { alert('No se encontró la lista para "' + key + '". Comprueba que exista en la base de datos.'); return false; }
-      await POST('/list_values', { list_id: listId, value, code });
-      await loadLists();
-      renderSettings();
-      return true;
+      try {
+        await POST('/list_values', { list_id: listId, value, code });
+        await loadLists();
+        renderSettings();
+        return true;
+      } catch (e) {
+        alert('Error al guardar: ' + e.message);
+        return false;
+      }
     });
   });
 });
