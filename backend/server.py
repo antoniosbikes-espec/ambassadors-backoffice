@@ -446,9 +446,12 @@ def init_db():
     conn.executescript(SCHEMA)
     conn.executescript(SEEDS)
     
-    # MIGRACIÓN: (Eliminada phone)
-    
-    
+    # MIGRACIÓN: (Eliminada phone, Añadida notes si no existe)
+    try:
+        conn.execute("ALTER TABLE ambassadors ADD COLUMN notes TEXT")
+        print("[DB] Columna 'notes' añadida a ambassadors")
+    except:
+        pass # Ya existe
     # Solo cargar datos demo de personas si la tabla está totalmente vacía
     count = conn.execute("SELECT COUNT(*) FROM ambassadors").fetchone()[0]
     if count == 0:
