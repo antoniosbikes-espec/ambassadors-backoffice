@@ -1062,8 +1062,10 @@ class Handler(BaseHTTPRequestHandler):
         """, (body.get('profile_id'), body.get('url'), body.get('mention_type_id'),
               body.get('mention_offset',0), body.get('content_score'), body.get('published_at')))
         db.commit()
-        row = db.execute("SELECT * FROM posts WHERE id=?", (cur.lastrowid,)).fetchone()
+        # Buscamos el post por URL (que es única) en lugar de lastrowid para evitar errores con UPSERT
+        row = db.execute("SELECT * FROM posts WHERE url=?", (body.get('url'),)).fetchone()
         db.close()
+        if not row: return self.send_err('Error al recuperar el post guardado', 500)
         self.send_json(dict(row), 201)
 
     def update_post(self, pid):
