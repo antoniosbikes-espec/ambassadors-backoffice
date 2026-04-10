@@ -17,6 +17,8 @@ let filteredAmbassadors = [];
 
 // ─── Bootstrap ───────────────────────────────────────────────
 async function init() {
+  console.log("🚀 Ambassadors App v1.2 — No Phone Version — Active");
+  document.title = "Ambassadors — v1.2";
   await loadLists();
   
   // Rellenar filtros principales (usando códigos para la búsqueda)
