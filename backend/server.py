@@ -1050,12 +1050,17 @@ class Handler(BaseHTTPRequestHandler):
     def create_post(self):
         body = self.read_body()
         db = get_db()
+        # Usamos ON CONFLICT para actualizar si ya existe, manteniendo el mismo ID y las estadísticas
         cur = db.execute("""
             INSERT INTO posts(profile_id,url,mention_type_id,mention_offset,content_score,published_at)
-            VALUES(?,?,?,?,?,?)""",
-            (body.get('profile_id'), body.get('url'), body.get('mention_type_id'),
-             body.get('mention_offset',0), body.get('content_score'), body.get('published_at'))
-        )
+            VALUES(?,?,?,?,?,?)
+            ON CONFLICT(url) DO UPDATE SET
+                mention_type_id=excluded.mention_type_id,
+                mention_offset=excluded.mention_offset,
+                content_score=excluded.content_score,
+                published_at=excluded.published_at
+        """, (body.get('profile_id'), body.get('url'), body.get('mention_type_id'),
+              body.get('mention_offset',0), body.get('content_score'), body.get('published_at')))
         db.commit()
         row = db.execute("SELECT * FROM posts WHERE id=?", (cur.lastrowid,)).fetchone()
         db.close()
