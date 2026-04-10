@@ -65,7 +65,6 @@ CREATE TABLE IF NOT EXISTS ambassadors (
     email                TEXT    NOT NULL UNIQUE,
     first_name           TEXT    NOT NULL,
     last_name            TEXT,
-    phone                TEXT,
     primary_language_id  INTEGER REFERENCES list_values(id),
     country_id           INTEGER REFERENCES list_values(id),
     notes                TEXT,
@@ -447,12 +446,7 @@ def init_db():
     conn.executescript(SCHEMA)
     conn.executescript(SEEDS)
     
-    # MIGRACIÓN: Asegurar que existe el campo phone (para entornos ya existentes como Railway)
-    try:
-        conn.execute("ALTER TABLE ambassadors ADD COLUMN phone TEXT;")
-        conn.commit()
-    except:
-        pass # Si ya existe, fallará silenciosamente
+    # MIGRACIÓN: (Eliminada phone)
     
     
     # Solo cargar datos demo de personas si la tabla está totalmente vacía
@@ -752,7 +746,7 @@ class Handler(BaseHTTPRequestHandler):
              body.get('notes'))
         )
         db.commit()
-        row = db.execute("SELECT * FROM ambassadors WHERE id=?", (cur.lastrowid,)).fetchone()
+        row = db.execute("SELECT id, email, first_name, last_name, primary_language_id, country_id, notes, created_at FROM ambassadors WHERE id=?", (cur.lastrowid,)).fetchone()
         db.close()
         self.send_json(dict(row), 201)
 
@@ -765,7 +759,7 @@ class Handler(BaseHTTPRequestHandler):
                     body.get('primary_language_id'), body.get('country_id'),
                     body.get('notes'), aid))
         db.commit()
-        row = db.execute("SELECT * FROM ambassadors WHERE id=?", (aid,)).fetchone()
+        row = db.execute("SELECT id, email, first_name, last_name, primary_language_id, country_id, notes, created_at FROM ambassadors WHERE id=?", (aid,)).fetchone()
         db.close()
         self.send_json(dict(row))
 
