@@ -433,10 +433,14 @@ WHERE (SELECT COUNT(*) FROM rpus) < 2;
 
 
 def get_db():
-    # Aumentamos el timeout a 30 segundos para evitar bloqueos
-    conn = sqlite3.connect(DB_PATH, timeout=30)
+    # Aumentamos el timeout a 60 segundos para ser extremadamente pacientes
+    conn = sqlite3.connect(DB_PATH, timeout=60)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=DELETE")
+    # WAL es mucho mejor para evitar "database is locked"
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+    except:
+        pass 
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
