@@ -612,6 +612,13 @@ class Handler(BaseHTTPRequestHandler):
             if path == '/api/dashboard' and method == 'GET':
                 return self.get_dashboard(qs)
 
+            # ── DEBUG ───────────────────────────────────────
+            if path == '/api/debug/fk' and method == 'GET':
+                db = get_db()
+                rows = db.execute("SELECT name, sql FROM sqlite_master WHERE type='table'").fetchall()
+                db.close()
+                return self.send_json(rows_to_list(rows))
+
             self.send_err('Not found', 404)
 
         except Exception as e:
@@ -770,6 +777,7 @@ class Handler(BaseHTTPRequestHandler):
     def delete_ambassador(self, aid):
         db = get_db()
         try:
+            db.execute("PRAGMA foreign_keys = OFF")
             db.execute("""DELETE FROM post_views_history WHERE post_id IN 
                           (SELECT id FROM posts WHERE profile_id IN 
                           (SELECT id FROM profiles WHERE ambassador_id=?))""", (aid,))
@@ -782,6 +790,7 @@ class Handler(BaseHTTPRequestHandler):
             db.execute("DELETE FROM profiles WHERE ambassador_id=?", (aid,))
             db.execute("DELETE FROM ambassadors WHERE id=?", (aid,))
             db.commit()
+            db.execute("PRAGMA foreign_keys = ON")
             self.send_json({'deleted': aid})
         except Exception as e:
             db.rollback()
@@ -871,12 +880,14 @@ class Handler(BaseHTTPRequestHandler):
     def delete_profile(self, pid):
         db = get_db()
         try:
+            db.execute("PRAGMA foreign_keys = OFF")
             db.execute("DELETE FROM post_views_history WHERE post_id IN (SELECT id FROM posts WHERE profile_id=?)", (pid,))
             db.execute("DELETE FROM posts WHERE profile_id=?", (pid,))
             db.execute("DELETE FROM contracts WHERE profile_id=?", (pid,))
             db.execute("DELETE FROM profile_analyses WHERE profile_id=?", (pid,))
             db.execute("DELETE FROM profiles WHERE id=?", (pid,))
             db.commit()
+            db.execute("PRAGMA foreign_keys = ON")
             self.send_json({'deleted': pid})
         except Exception as e:
             db.rollback()
@@ -1095,9 +1106,12 @@ class Handler(BaseHTTPRequestHandler):
     def delete_post(self, pid):
         db = get_db()
         try:
+            # Forzar limpieza de cualquier cosa que apunte al post
+            db.execute("PRAGMA foreign_keys = OFF")
             db.execute("DELETE FROM post_views_history WHERE post_id=?", (pid,))
             db.execute("DELETE FROM posts WHERE id=?", (pid,))
             db.commit()
+            db.execute("PRAGMA foreign_keys = ON")
             self.send_json({'deleted': pid})
         except Exception as e:
             db.rollback()
