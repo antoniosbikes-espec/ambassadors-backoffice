@@ -512,6 +512,14 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
         self.end_headers()
 
+    def do_HEAD(self):
+        # Railway CDN hace HEAD requests como health check.
+        # Responder 200 para que no marque el servidor como caído.
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.end_headers()
+
     def do_GET(self):  self.route('GET')
     def do_POST(self): self.route('POST')
     def do_PUT(self):  self.route('PUT')
