@@ -1,1 +1,1 @@
-# stdlib only — no packages needed
+requests
