@@ -522,8 +522,13 @@ async function renderDetailProfiles() {
 
 window.deleteProfile = async (pid) => {
   if (!confirm('¿Eliminar este perfil?')) return;
-  await DELETE(`/profiles/${pid}`);
-  renderDetailProfiles();
+  try {
+    await DELETE(`/profiles/${pid}`);
+    await renderDetailProfiles();
+    await renderAmbassadors();
+  } catch (e) {
+    alert('Error al eliminar perfil: ' + e.message);
+  }
 };
 
 async function renderDetailContracts() {
@@ -551,8 +556,12 @@ async function renderDetailContracts() {
 
 window.deleteContract = async (cid) => {
   if (!confirm('¿Eliminar este contrato?')) return;
-  await DELETE(`/contracts/${cid}`);
-  renderDetailContracts();
+  try {
+    await DELETE(`/contracts/${cid}`);
+    await renderDetailContracts();
+  } catch (e) {
+    alert('Error al eliminar contrato: ' + e.message);
+  }
 };
 
 async function renderDetailContent() {
@@ -583,8 +592,12 @@ async function renderDetailContent() {
 
 window.deletePost = async (pid) => {
   if (!confirm('¿Eliminar este post?')) return;
-  await DELETE(`/posts/${pid}`);
-  renderDetailContent();
+  try {
+    await DELETE(`/posts/${pid}`);
+    await renderDetailContent();
+  } catch (e) {
+    alert('Error al eliminar post: ' + e.message);
+  }
 };
 
 // ── Delegación en tab-content ──────────────────────────────
@@ -670,11 +683,15 @@ document.getElementById('btn-edit-ambassador').addEventListener('click', async (
 document.getElementById('btn-delete-ambassador').addEventListener('click', async () => {
   if (!selectedAmbassadorId) return;
   if (!confirm('¿Seguro que quieres eliminar este embajador? Se borrarán todos sus perfiles y contratos.')) return;
-  await DELETE(`/ambassadors/${selectedAmbassadorId}`);
-  selectedAmbassadorId = null;
-  document.getElementById('detail-empty').style.display = 'flex';
-  document.getElementById('detail-content').style.display = 'none';
-  renderAmbassadors();
+  try {
+    await DELETE(`/ambassadors/${selectedAmbassadorId}`);
+    selectedAmbassadorId = null;
+    document.getElementById('detail-empty').style.display = 'flex';
+    document.getElementById('detail-content').style.display = 'none';
+    renderAmbassadors();
+  } catch (e) {
+    alert('Error al eliminar embajador: ' + e.message);
+  }
 });
 
 document.getElementById('btn-add-profile').addEventListener('click', () => {
