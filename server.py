@@ -16,7 +16,12 @@ if os.path.exists('/persistent_data'):
 elif os.path.exists('/data'):
     DB_DIR = '/data'
 else:
-    DB_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'db')
+    # If server.py is in root, use ./db. If in backend/, use ../db.
+    base = os.path.dirname(__file__)
+    if os.path.exists(os.path.join(base, 'db')) or not os.path.exists(os.path.join(os.path.dirname(base), 'db')):
+        DB_DIR = os.path.join(base, 'db')
+    else:
+        DB_DIR = os.path.join(os.path.dirname(base), 'db')
 
 DB_PATH = os.path.join(DB_DIR, 'ambassadors.db')
 
@@ -1416,3 +1421,4 @@ if __name__ == "__main__":
         print("\nStopping...")
         server.server_close()
 # Force redeploy 2
+
