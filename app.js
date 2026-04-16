@@ -203,6 +203,38 @@ function navigateTo(page) {
   if (page === 'settings')    renderSettings();
 }
 
+// ── Mobile sidebar drawer ────────────────────────────────────
+(function() {
+  const hamburger = document.getElementById('hamburger-btn');
+  const sidebar   = document.getElementById('sidebar');
+  const overlay   = document.getElementById('sidebar-overlay');
+
+  function openSidebar() {
+    sidebar.classList.add('open');
+    overlay.classList.add('visible');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeSidebar() {
+    sidebar.classList.remove('open');
+    overlay.classList.remove('visible');
+    document.body.style.overflow = '';
+  }
+
+  if (hamburger) hamburger.addEventListener('click', () => {
+    sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
+  });
+
+  if (overlay) overlay.addEventListener('click', closeSidebar);
+
+  // Close sidebar when nav item clicked on mobile
+  sidebar.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', () => {
+      if (window.innerWidth <= 640) closeSidebar();
+    });
+  });
+})();
+
 document.querySelectorAll('.nav-item').forEach(item => {
   item.addEventListener('click', e => {
     e.preventDefault();
@@ -453,52 +485,39 @@ async function switchDetailTab(tabId) {
   if (tabId === 'content')    await renderDetailContent();
 }
 
+// ── Revenue formula constants (mirrors server.py) ────────────
+const COUNTRY_RPM_MULT = {
+  MX:1.00, ES:1.33, CO:0.53, CL:0.53, BR:0.33, DE:3.00,
+  FR:1.47, IT:2.67, PT:0.72, UK:3.00, US:5.00, AU:3.67,
+  CA:3.67, AR:0.40, IE:3.00
+};
+const LATAM_CODES = new Set(['AR','CO','CL','PE','EC','VE','UY','PY','BO','GT','HN','SV','NI','CR','PA','DO','PR']);
+const CACHE_MULT  = { LOW:0.8, MID:1.0, HIGH:1.2 };
+
+function calcExpectedRevenue(pa, platformCode, monthlyStd, monthlyTop, countryCode) {
+  const ev = pa?.expected_views || 0;
+  if (ev === 0) return 0;
+  const c_code      = (countryCode || '').toUpperCase();
+  const countryMult = COUNTRY_RPM_MULT[c_code] ?? (LATAM_CODES.has(c_code) ? 0.40 : 0.12);
+  const cacheMult   = CACHE_MULT[(pa?.cache_score || 'MID').toUpperCase()] ?? 1.0;
+  const cts         = pa?.content_target_score ?? 1.0;
+  const cots        = Math.min((pa?.country_target_score ?? 0.6) / 0.6, 1.0);
+  const base        = (ev / 1000) * 42 * countryMult * cacheMult * cts * cots;
+  const pCode       = (platformCode || '').toLowerCase();
+  if (pCode === 'youtube') return (base * 2.5 * (monthlyStd || 0)) + (base * 4.0 * (monthlyTop || 0));
+  if (pCode === 'tiktok')  return base * 1.0 * ((monthlyStd || 0) + (monthlyTop || 0));
+  return 0; // other platforms: 0 per spec
+}
+
 async function renderDetailOverview() {
-  const a          = await GET(`/ambassadors/${selectedAmbassadorId}`).catch(() => ({}));
-  const profiles   = await GET('/profiles',  { ambassador_id: selectedAmbassadorId }).catch(() => []);
-  const posts      = await GET('/posts',     { ambassador_id: selectedAmbassadorId }).catch(() => []);
-  const contracts  = await GET('/contracts', { ambassador_id: selectedAmbassadorId }).catch(() => []);
+  const a         = await GET(`/ambassadors/${selectedAmbassadorId}`).catch(() => ({}));
+  const posts     = await GET('/posts',     { ambassador_id: selectedAmbassadorId }).catch(() => []);
+  const contracts = await GET('/contracts', { ambassador_id: selectedAmbassadorId }).catch(() => []);
 
   const totalViews = posts.reduce((s, p) => s + (p.total_views || 0), 0);
   const avgScore   = posts.length ? posts.reduce((s, p) => s + (p.content_score || 0), 0) / posts.length : 0;
-  const totalRev   = contracts.reduce((s, c) => s +
-    (c.price_per_standard_post || 0) * (c.monthly_standard_posts || 0) +
-    (c.price_per_top_post || 0) * (c.monthly_top_posts || 0), 0) * 12;
-
-  document.getElementById('ov-views').textContent   = fmt(totalViews, 'compact');
-  document.getElementById('ov-posts').textContent   = posts.length;
-  document.getElementById('ov-score').textContent   = avgScore.toFixed(2);
-  document.getElementById('ov-revenue').textContent = fmt(totalRev, 'currency');
 
 
-  // Status badge
-  const latestContract = contracts[0];
-  const statusCode     = latestContract?.status_code || '';
-  const statusLabel    = latestContract?.status || '—';
-  document.getElementById('detail-status-badge').innerHTML = latestContract
-    ? statusBadge(statusCode, statusLabel)
-    : '<span class="badge badge-inactive">Sin contrato</span>';
-
-  // Mini bar chart
-  destroyChart('amb-views');
-  const ctx = document.getElementById('canvas-ambassador-views');
-  if (ctx) {
-    const days = 30;
-    const labels = [], values = [];
-    const now = new Date();
-    for (let i = days-1; i >= 0; i--) {
-      const d = new Date(now); d.setDate(d.getDate() - i);
-      labels.push(d.toLocaleDateString('es-ES', {month:'short', day:'numeric'}));
-      const base = totalViews / days;
-      values.push(Math.max(0, Math.round(base + (Math.random() - 0.4) * base)));
-    }
-    chartInstances['amb-views'] = new Chart(ctx, {
-      type:'bar', data:{ labels, datasets:[{ label:'Views', data:values,
-        backgroundColor:'rgba(139,92,246,0.5)', borderRadius:3, borderSkipped:false }]},
-      options:{ ...baseOpts(), scales:{ x:{display:false}, y:yAxis() } }
-    });
-  }
-}
 
 async function renderDetailProfiles() {
   const profiles = await GET('/profiles', { ambassador_id: selectedAmbassadorId }).catch(() => []);

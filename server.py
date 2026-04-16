@@ -1058,7 +1058,8 @@ class Handler(BaseHTTPRequestHandler):
         """, (body.get('profile_id'), body.get('url'), body.get('mention_type_id'),
               body.get('mention_offset',0), body.get('content_score'), body.get('published_at')))
         self.db.commit()
-        # Buscamos el post por URL (que es única) en lugar de lastrowid para evitar errores con UPSERT
+        # Buscamos el post por URL (única) para evitar errores con UPSERT + lastrowid
+        row = self.db.execute("SELECT * FROM posts WHERE url=?", (body.get('url'),)).fetchone()
         if not row: return self.send_err('Error al recuperar el post guardado', 500)
         self.send_json(dict(row), 201)
 
@@ -1245,11 +1246,9 @@ class Handler(BaseHTTPRequestHandler):
                 if c_code in LATAM_CODES: country_mult = 0.40
                 else: country_mult = 0.12 # Developing / Default
             
-            # 2. Cache Multiplier (LOW: 0.8 / MID: 1.0 / HIGH: 1.2)
-            c_score = r['cache_score'] or 0.6
-            cache_mult = 1.0
-            if c_score < 0.4: cache_mult = 0.8
-            elif c_score > 0.75: cache_mult = 1.2
+            # 2. Cache Multiplier — ENUM: LOW=0.8, MID=1.0, HIGH=1.2
+            cache_val = (r['cache_score'] or 'MID').upper()
+            cache_mult = {'LOW': 0.8, 'MID': 1.0, 'HIGH': 1.2}.get(cache_val, 1.0)
             
             # 3. Target Scores (Content & Country)
             cts = r['content_target_score'] or 1.0
@@ -1337,10 +1336,10 @@ class Handler(BaseHTTPRequestHandler):
                 'total_profiles': total_profiles,
                 'signed_contracts': signed_contracts,
                 'total_views': total_views,
-                'expected_revenue': expected_revenue,
+                'expected_revenue': round(expected_revenue, 2),
                 'real_revenue': real_revenue
             },
-            'trend': trend,
+            'views_trend': trend,
             'platform_split': platform_split,
             'top_ambassadors': top
         })
