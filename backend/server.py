@@ -1054,66 +1054,56 @@ class Handler(BaseHTTPRequestHandler):
               body.get('mention_offset',0), body.get('content_score'), body.get('published_at')))
         self.db.commit()
         # Buscamos el post por URL (que es única) en lugar de lastrowid para evitar errores con UPSERT
-        db.close()
         if not row: return self.send_err('Error al recuperar el post guardado', 500)
         self.send_json(dict(row), 201)
 
     def update_post(self, pid):
         body = self.read_body()
-        db = get_db()
-        db.execute("""UPDATE posts SET url=?,mention_type_id=?,mention_offset=?,
+        self.db.execute("""UPDATE posts SET url=?,mention_type_id=?,mention_offset=?,
               content_score=?,published_at=? WHERE id=?""",
             (body.get('url'), body.get('mention_type_id'), body.get('mention_offset',0),
              body.get('content_score'), body.get('published_at'), pid))
-        db.commit()
-        row = db.execute("SELECT * FROM posts WHERE id=?", (pid,)).fetchone()
-        db.close()
+        self.db.commit()
+        row = self.db.execute("SELECT * FROM posts WHERE id=?", (pid,)).fetchone()
         self.send_json(dict(row))
 
     def delete_post(self, pid):
-        db = get_db()
         try:
             # Forzar limpieza de cualquier cosa que apunte al post
-            db.execute("PRAGMA foreign_keys = OFF")
-            db.execute("DELETE FROM post_views_history WHERE post_id=?", (pid,))
-            db.execute("DELETE FROM posts WHERE id=?", (pid,))
-            db.commit()
-            db.execute("PRAGMA foreign_keys = ON")
+            self.db.execute("PRAGMA foreign_keys = OFF")
+            self.db.execute("DELETE FROM post_views_history WHERE post_id=?", (pid,))
+            self.db.execute("DELETE FROM posts WHERE id=?", (pid,))
+            self.db.commit()
+            self.db.execute("PRAGMA foreign_keys = ON")
             self.send_json({'deleted': pid})
         except Exception as e:
-            db.rollback()
+            self.db.rollback()
             self.send_err(str(e), 500)
         finally:
-            db.close()
 
     # ── POST VIEWS ───────────────────────────────────────────
     def get_post_views(self, qs={}):
-        db = get_db()
         sql = "SELECT * FROM post_views_history"
         params = []
         if qs.get('post_id'):
             sql += ' WHERE post_id=?'; params.append(qs['post_id'][0])
         sql += ' ORDER BY views_date'
-        rows = db.execute(sql, params).fetchall()
-        db.close()
+        rows = self.db.execute(sql, params).fetchall()
         self.send_json(rows_to_list(rows))
 
     def create_post_views(self):
         body = self.read_body()
-        db = get_db()
-        cur = db.execute(
+        cur = self.db.execute(
             "INSERT OR REPLACE INTO post_views_history(post_id,views_date,new_views) VALUES(?,?,?)",
             (body.get('post_id'), body.get('views_date'), body.get('new_views',0))
         )
-        db.commit()
-        row = db.execute("SELECT * FROM post_views_history WHERE id=?", (cur.lastrowid,)).fetchone()
-        db.close()
+        self.db.commit()
+        row = self.db.execute("SELECT * FROM post_views_history WHERE id=?", (cur.lastrowid,)).fetchone()
         self.send_json(dict(row), 201)
 
     # ── REVENUES ─────────────────────────────────────────────
     def get_revenues(self, qs={}):
-        db = get_db()
-        rows = db.execute("""
+        rows = self.db.execute("""
             SELECT r.*, lv_c.value AS country, lv_c.code AS country_code,
               lv_cur.value AS currency, lv_cur.code AS currency_code
             FROM revenues r
@@ -1121,32 +1111,26 @@ class Handler(BaseHTTPRequestHandler):
             LEFT JOIN list_values lv_cur ON lv_cur.id = r.currency_id
             ORDER BY r.views_date DESC
         """).fetchall()
-        db.close()
         self.send_json(rows_to_list(rows))
 
     def create_revenue(self):
         body = self.read_body()
-        db = get_db()
-        cur = db.execute(
+        cur = self.db.execute(
             "INSERT INTO revenues(views_date,country_id,currency_id,amount) VALUES(?,?,?,?)",
             (body.get('views_date'), body.get('country_id'), body.get('currency_id'), body.get('amount',0))
         )
-        db.commit()
-        row = db.execute("SELECT * FROM revenues WHERE id=?", (cur.lastrowid,)).fetchone()
-        db.close()
+        self.db.commit()
+        row = self.db.execute("SELECT * FROM revenues WHERE id=?", (cur.lastrowid,)).fetchone()
         self.send_json(dict(row), 201)
 
     def delete_revenue(self, rid):
-        db = get_db()
-        db.execute("DELETE FROM revenues WHERE id=?", (rid,))
-        db.commit()
-        db.close()
+        self.db.execute("DELETE FROM revenues WHERE id=?", (rid,))
+        self.db.commit()
         self.send_json({'deleted': rid})
 
     # ── RPUS ─────────────────────────────────────────────────
     def get_rpus(self, qs={}):
-        db = get_db()
-        rows = db.execute("""
+        rows = self.db.execute("""
             SELECT r.*, lv_c.value AS country, lv_c.code AS country_code,
               lv_n.value AS niche, lv_n.code AS niche_code
             FROM rpus r
@@ -1154,26 +1138,21 @@ class Handler(BaseHTTPRequestHandler):
             LEFT JOIN list_values lv_n ON lv_n.id = r.niche_id
             ORDER BY r.views_date DESC
         """).fetchall()
-        db.close()
         self.send_json(rows_to_list(rows))
 
     def create_rpu(self):
         body = self.read_body()
-        db = get_db()
-        cur = db.execute(
+        cur = self.db.execute(
             "INSERT OR REPLACE INTO rpus(views_date,country_id,niche_id,rpu) VALUES(?,?,?,?)",
             (body.get('views_date'), body.get('country_id'), body.get('niche_id'), body.get('rpu',0))
         )
-        db.commit()
-        row = db.execute("SELECT * FROM rpus WHERE id=?", (cur.lastrowid,)).fetchone()
-        db.close()
+        self.db.commit()
+        row = self.db.execute("SELECT * FROM rpus WHERE id=?", (cur.lastrowid,)).fetchone()
         self.send_json(dict(row), 201)
 
     def delete_rpu(self, rid):
-        db = get_db()
-        db.execute("DELETE FROM rpus WHERE id=?", (rid,))
-        db.commit()
-        db.close()
+        self.db.execute("DELETE FROM rpus WHERE id=?", (rid,))
+        self.db.commit()
         self.send_json({'deleted': rid})
 
     # ── DASHBOARD (agregado) ─────────────────────────────────
@@ -1207,18 +1186,16 @@ class Handler(BaseHTTPRequestHandler):
             all_conds = where_parts + extra_conditions
             if not all_conds: return "", []
             return " WHERE " + " AND ".join(all_conds), params + [c[1] for c in extra_conditions if isinstance(c, tuple)]
-
-        db = get_db()
         
         # 1. KPIs principales
         w_sql, w_params = build_where()
-        res = db.execute(f"SELECT COUNT(DISTINCT a.id), COUNT(DISTINCT p.id) {base_from} {w_sql}", params).fetchone()
+        res = self.db.execute(f"SELECT COUNT(DISTINCT a.id), COUNT(DISTINCT p.id) {base_from} {w_sql}", params).fetchone()
         total_ambassadors = res[0]
         total_profiles    = res[1]
         
         # Contratos firmados
         w_sql_s, _ = build_where(["lv_s.code='signed'"])
-        signed_contracts = db.execute(f"""
+        signed_contracts = self.db.execute(f"""
             SELECT COUNT(DISTINCT c.id) {base_from}
             JOIN contracts c ON c.profile_id = p.id
             JOIN list_values lv_s ON lv_s.id = c.status_id
@@ -1227,7 +1204,7 @@ class Handler(BaseHTTPRequestHandler):
 
         # Revenue Esperado (NUEVA FÓRMULA PERFORMANCE-BASED)
         w_sql_s, _ = build_where(["lv_s.code='signed'"])
-        rows_perf = db.execute(f"""
+        rows_perf = self.db.execute(f"""
             SELECT 
                 c.monthly_standard_posts, c.monthly_top_posts,
                 pa.expected_views, pa.cache_score, pa.content_target_score, pa.country_target_score,
@@ -1300,11 +1277,11 @@ class Handler(BaseHTTPRequestHandler):
             rev_params.append(qs['country_code'][0])
         
         rev_where = " WHERE " + " AND ".join(rev_where_parts)
-        real_revenue = db.execute(f"SELECT SUM(amount) FROM revenues r {rev_where}", rev_params).fetchone()[0] or 0
+        real_revenue = self.db.execute(f"SELECT SUM(amount) FROM revenues r {rev_where}", rev_params).fetchone()[0] or 0
         
         # Views totales
         w_sql_v, _ = build_where()
-        total_views = db.execute(f"""
+        total_views = self.db.execute(f"""
             SELECT COALESCE(SUM(pvh.new_views),0) {base_from}
             JOIN posts po ON po.profile_id = p.id
             JOIN post_views_history pvh ON pvh.post_id = po.id
@@ -1315,7 +1292,7 @@ class Handler(BaseHTTPRequestHandler):
         trend_conds = ["pvh.views_date >= date('now', ?)"]
         w_sql_t, _ = build_where(trend_conds)
         # El parámetro de la fecha va al FINAL porque trend_conds se añade al final de where_parts
-        trend_rows = db.execute(f"""
+        trend_rows = self.db.execute(f"""
             SELECT pvh.views_date, SUM(pvh.new_views) AS views {base_from}
             JOIN posts po ON po.profile_id = p.id
             JOIN post_views_history pvh ON pvh.post_id = po.id
@@ -1326,7 +1303,7 @@ class Handler(BaseHTTPRequestHandler):
 
         # 3. Distribución por plataforma
         w_sql_p, _ = build_where()
-        plat_rows = db.execute(f"""
+        plat_rows = self.db.execute(f"""
             SELECT lv.value AS platform, COUNT(DISTINCT p.id) AS count {base_from}
             JOIN list_values lv ON lv.id = p.platform_id
             {w_sql_p}
@@ -1336,7 +1313,7 @@ class Handler(BaseHTTPRequestHandler):
 
         # 4. Top Ambassadors (respetando filtros)
         w_sql_top, _ = build_where()
-        top_rows = db.execute(f"""
+        top_rows = self.db.execute(f"""
             SELECT a.id, a.first_name || ' ' || COALESCE(a.last_name,'') AS name,
                    lv_c.code AS country_code,
                    (SELECT lv_p.code FROM profiles p2 JOIN list_values lv_p ON lv_p.id = p2.platform_id WHERE p2.ambassador_id = a.id LIMIT 1) AS platform_code,
@@ -1351,8 +1328,6 @@ class Handler(BaseHTTPRequestHandler):
             GROUP BY a.id ORDER BY total_views DESC LIMIT 5
         """, params).fetchall()
         top = [dict(r) for r in top_rows]
-        
-        db.close()
         self.send_json({
             'kpis': {
                 'total_ambassadors': total_ambassadors,
