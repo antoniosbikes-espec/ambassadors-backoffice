@@ -438,9 +438,9 @@ WHERE (SELECT COUNT(*) FROM rpus) < 2;
 
 
 def get_db():
-    conn = sqlite3.connect(DB_PATH, timeout=60)
+    conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA busy_timeout = 10000") # 10s timeout
+    conn.execute("PRAGMA busy_timeout = 30000") # 30s timeout
     try:
         conn.execute("PRAGMA journal_mode=WAL")
     except:
@@ -520,10 +520,19 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Origin', '*')
         self.end_headers()
 
-    def do_GET(self):  self.route('GET')
-    def do_POST(self): self.route('POST')
-    def do_PUT(self):  self.route('PUT')
-    def do_DELETE(self): self.route('DELETE')
+    def do_GET(self):  self.handle_method('GET')
+    def do_POST(self): self.handle_method('POST')
+    def do_PUT(self):  self.handle_method('PUT')
+    def do_DELETE(self): self.handle_method('DELETE')
+
+    def handle_method(self, method):
+        # Abrir DB al inicio de la petición
+        self.db = get_db()
+        try:
+            self.route(method)
+        finally:
+            # Asegurar cierre de DB al final de la petición, pase lo que pase
+            self.db.close()
 
     def route(self, method):
         parsed = urlparse(self.path)
@@ -627,9 +636,7 @@ class Handler(BaseHTTPRequestHandler):
 
             # ── DEBUG ───────────────────────────────────────
             if path == '/api/debug/fk' and method == 'GET':
-                db = get_db()
-                rows = db.execute("SELECT name, sql FROM sqlite_master WHERE type='table'").fetchall()
-                db.close()
+                rows = self.db.execute("SELECT name, sql FROM sqlite_master WHERE type='table'").fetchall()
                 return self.send_json(rows_to_list(rows))
 
             self.send_err(f'Not found: {method} {path}', 404)
@@ -640,67 +647,56 @@ class Handler(BaseHTTPRequestHandler):
 
     # ── LIST ENDPOINTS ───────────────────────────────────────
     def get_lists(self):
-        db = get_db()
-        rows = db.execute("""
+        rows = self.db.execute("""
             SELECT lv.*, l.name as list_name FROM list_values lv
             JOIN lists l ON l.id = lv.list_id
             WHERE lv.is_active = 1
             ORDER BY l.name, lv.value
         """).fetchall()
-        db.close()
         self.send_json(rows_to_list(rows))
 
     def get_list_values(self, list_name=None):
-        db = get_db()
         if list_name:
-            rows = db.execute("""
+            rows = self.db.execute("""
                 SELECT lv.*, l.name as list_name FROM list_values lv
                 JOIN lists l ON l.id = lv.list_id
                 WHERE l.name = ? AND lv.is_active = 1
                 ORDER BY lv.value
             """, (list_name,)).fetchall()
         else:
-            rows = db.execute("""
+            rows = self.db.execute("""
                 SELECT lv.*, l.name as list_name FROM list_values lv
                 JOIN lists l ON l.id = lv.list_id
                 WHERE lv.is_active = 1
                 ORDER BY l.name, lv.value
             """).fetchall()
-        db.close()
         self.send_json(rows_to_list(rows))
 
     def create_list_value(self):
         body = self.read_body()
-        db = get_db()
-        cur = db.execute(
+        cur = self.db.execute(
             "INSERT INTO list_values(list_id,value,code) VALUES(?,?,?)",
             (body.get('list_id'), body.get('value'), body.get('code'))
         )
-        db.commit()
-        row = db.execute("SELECT lv.*,l.name as list_name FROM list_values lv JOIN lists l ON l.id=lv.list_id WHERE lv.id=?", (cur.lastrowid,)).fetchone()
-        db.close()
+        self.db.commit()
+        row = self.db.execute("SELECT lv.*,l.name as list_name FROM list_values lv JOIN lists l ON l.id=lv.list_id WHERE lv.id=?", (cur.lastrowid,)).fetchone()
         self.send_json(dict(row), 201)
 
     def update_list_value(self, lv_id):
         body = self.read_body()
-        db = get_db()
-        db.execute("UPDATE list_values SET value=?,code=?,is_active=? WHERE id=?",
+        self.db.execute("UPDATE list_values SET value=?,code=?,is_active=? WHERE id=?",
                    (body.get('value'), body.get('code'), body.get('is_active', 1), lv_id))
-        db.commit()
-        row = db.execute("SELECT lv.*,l.name as list_name FROM list_values lv JOIN lists l ON l.id=lv.list_id WHERE lv.id=?", (lv_id,)).fetchone()
-        db.close()
+        self.db.commit()
+        row = self.db.execute("SELECT lv.*,l.name as list_name FROM list_values lv JOIN lists l ON l.id=lv.list_id WHERE lv.id=?", (lv_id,)).fetchone()
         self.send_json(dict(row))
 
     def delete_list_value(self, lv_id):
-        db = get_db()
-        db.execute("UPDATE list_values SET is_active=0 WHERE id=?", (lv_id,))
-        db.commit()
-        db.close()
+        self.db.execute("UPDATE list_values SET is_active=0 WHERE id=?", (lv_id,))
+        self.db.commit()
         self.send_json({'deleted': lv_id})
 
     # ── AMBASSADOR ENDPOINTS ─────────────────────────────────
     def get_ambassadors(self, qs={}):
-        db = get_db()
         sql = """
             SELECT a.id, a.email, a.first_name, a.last_name, a.primary_language_id, a.country_id, a.created_at,
               lv_lang.value  AS language,
@@ -743,13 +739,11 @@ class Handler(BaseHTTPRequestHandler):
         if where:
             sql += ' WHERE ' + ' AND '.join(where)
         sql += ' ORDER BY a.first_name'
-        rows = db.execute(sql, params).fetchall()
-        db.close()
+        rows = self.db.execute(sql, params).fetchall()
         self.send_json(rows_to_list(rows))
 
     def get_ambassador(self, aid):
-        db = get_db()
-        row = db.execute("""
+        row = self.db.execute("""
             SELECT a.id, a.email, a.first_name, a.last_name, a.primary_language_id, a.country_id, a.created_at,
               lv_lang.value  AS language, lv_lang.code AS language_code,
               lv_country.value AS country, lv_country.code AS country_code
@@ -758,62 +752,53 @@ class Handler(BaseHTTPRequestHandler):
             LEFT JOIN list_values lv_country ON lv_country.id = a.country_id
             WHERE a.id = ?
         """, (aid,)).fetchone()
-        db.close()
         if not row: return self.send_err('Not found', 404)
         self.send_json(dict(row))
 
     def create_ambassador(self):
         body = self.read_body()
-        db = get_db()
-        cur = db.execute(
+        cur = self.db.execute(
             "INSERT INTO ambassadors(email,first_name,last_name,primary_language_id,country_id) VALUES(?,?,?,?,?)",
             (body.get('email'), body.get('first_name'), body.get('last_name'),
              body.get('primary_language_id'), body.get('country_id'))
         )
-        db.commit()
-        row = db.execute("SELECT id, email, first_name, last_name, primary_language_id, country_id, created_at FROM ambassadors WHERE id=?", (cur.lastrowid,)).fetchone()
-        db.close()
+        self.db.commit()
+        row = self.db.execute("SELECT id, email, first_name, last_name, primary_language_id, country_id, created_at FROM ambassadors WHERE id=?", (cur.lastrowid,)).fetchone()
         self.send_json(dict(row), 201)
 
     def update_ambassador(self, aid):
         body = self.read_body()
-        db = get_db()
-        db.execute("""UPDATE ambassadors SET email=?,first_name=?,last_name=?,
+        self.db.execute("""UPDATE ambassadors SET email=?,first_name=?,last_name=?,
                       primary_language_id=?,country_id=? WHERE id=?""",
                    (body.get('email'), body.get('first_name'), body.get('last_name'),
                     body.get('primary_language_id'), body.get('country_id'), aid))
-        db.commit()
-        row = db.execute("SELECT id, email, first_name, last_name, primary_language_id, country_id, created_at FROM ambassadors WHERE id=?", (aid,)).fetchone()
-        db.close()
+        self.db.commit()
+        row = self.db.execute("SELECT id, email, first_name, last_name, primary_language_id, country_id, created_at FROM ambassadors WHERE id=?", (aid,)).fetchone()
         self.send_json(dict(row))
 
     def delete_ambassador(self, aid):
-        db = get_db()
         try:
-            db.execute("PRAGMA foreign_keys = OFF")
-            db.execute("""DELETE FROM post_views_history WHERE post_id IN 
+            self.db.execute("PRAGMA foreign_keys = OFF")
+            self.db.execute("""DELETE FROM post_views_history WHERE post_id IN 
                           (SELECT id FROM posts WHERE profile_id IN 
                           (SELECT id FROM profiles WHERE ambassador_id=?))""", (aid,))
-            db.execute("""DELETE FROM posts WHERE profile_id IN 
+            self.db.execute("""DELETE FROM posts WHERE profile_id IN 
                           (SELECT id FROM profiles WHERE ambassador_id=?)""", (aid,))
-            db.execute("""DELETE FROM contracts WHERE profile_id IN 
+            self.db.execute("""DELETE FROM contracts WHERE profile_id IN 
                           (SELECT id FROM profiles WHERE ambassador_id=?)""", (aid,))
-            db.execute("""DELETE FROM profile_analyses WHERE profile_id IN 
+            self.db.execute("""DELETE FROM profile_analyses WHERE profile_id IN 
                           (SELECT id FROM profiles WHERE ambassador_id=?)""", (aid,))
-            db.execute("DELETE FROM profiles WHERE ambassador_id=?", (aid,))
-            db.execute("DELETE FROM ambassadors WHERE id=?", (aid,))
-            db.commit()
-            db.execute("PRAGMA foreign_keys = ON")
+            self.db.execute("DELETE FROM profiles WHERE ambassador_id=?", (aid,))
+            self.db.execute("DELETE FROM ambassadors WHERE id=?", (aid,))
+            self.db.commit()
+            self.db.execute("PRAGMA foreign_keys = ON")
             self.send_json({'deleted': aid})
         except Exception as e:
-            db.rollback()
+            self.db.rollback()
             self.send_err(str(e), 500)
-        finally:
-            db.close()
 
     # ── PROFILE ENDPOINTS ────────────────────────────────────
     def get_profiles(self, qs={}):
-        db = get_db()
         sql = """
             SELECT p.*,
               a.first_name || ' ' || COALESCE(a.last_name,'') AS ambassador_name,
@@ -845,13 +830,11 @@ class Handler(BaseHTTPRequestHandler):
         if where:
             sql += ' WHERE ' + ' AND '.join(where)
         sql += ' ORDER BY a.first_name, p.id'
-        rows = db.execute(sql, params).fetchall()
-        db.close()
+        rows = self.db.execute(sql, params).fetchall()
         self.send_json(rows_to_list(rows))
 
     def get_profile(self, pid):
-        db = get_db()
-        row = db.execute("""
+        row = self.db.execute("""
             SELECT p.*,
               a.first_name || ' ' || COALESCE(a.last_name,'') AS ambassador_name,
               lv_plat.value AS platform, lv_plat.code AS platform_code,
@@ -862,68 +845,57 @@ class Handler(BaseHTTPRequestHandler):
             LEFT JOIN list_values lv_niche ON lv_niche.id = p.niche_id
             WHERE p.id=?
         """, (pid,)).fetchone()
-        db.close()
         if not row: return self.send_err('Not found', 404)
         self.send_json(dict(row))
 
     def create_profile(self):
         body = self.read_body()
-        db = get_db()
-        cur = db.execute(
+        cur = self.db.execute(
             "INSERT INTO profiles(ambassador_id,platform_id,handle,url,niche_id) VALUES(?,?,?,?,?)",
             (body.get('ambassador_id'), body.get('platform_id'),
              body.get('handle'), body.get('url'), body.get('niche_id'))
         )
-        db.commit()
-        row = db.execute("SELECT * FROM profiles WHERE id=?", (cur.lastrowid,)).fetchone()
-        db.close()
+        self.db.commit()
+        row = self.db.execute("SELECT * FROM profiles WHERE id=?", (cur.lastrowid,)).fetchone()
         self.send_json(dict(row), 201)
 
     def update_profile(self, pid):
         body = self.read_body()
-        db = get_db()
-        db.execute("UPDATE profiles SET platform_id=?,handle=?,url=?,niche_id=? WHERE id=?",
+        self.db.execute("UPDATE profiles SET platform_id=?,handle=?,url=?,niche_id=? WHERE id=?",
                    (body.get('platform_id'), body.get('handle'), body.get('url'),
                     body.get('niche_id'), pid))
-        db.commit()
-        row = db.execute("SELECT * FROM profiles WHERE id=?", (pid,)).fetchone()
-        db.close()
+        self.db.commit()
+        row = self.db.execute("SELECT * FROM profiles WHERE id=?", (pid,)).fetchone()
         self.send_json(dict(row))
 
     def delete_profile(self, pid):
-        db = get_db()
         try:
-            db.execute("PRAGMA foreign_keys = OFF")
-            db.execute("DELETE FROM post_views_history WHERE post_id IN (SELECT id FROM posts WHERE profile_id=?)", (pid,))
-            db.execute("DELETE FROM posts WHERE profile_id=?", (pid,))
-            db.execute("DELETE FROM contracts WHERE profile_id=?", (pid,))
-            db.execute("DELETE FROM profile_analyses WHERE profile_id=?", (pid,))
-            db.execute("DELETE FROM profiles WHERE id=?", (pid,))
-            db.commit()
-            db.execute("PRAGMA foreign_keys = ON")
+            self.db.execute("PRAGMA foreign_keys = OFF")
+            self.db.execute("DELETE FROM post_views_history WHERE post_id IN (SELECT id FROM posts WHERE profile_id=?)", (pid,))
+            self.db.execute("DELETE FROM posts WHERE profile_id=?", (pid,))
+            self.db.execute("DELETE FROM contracts WHERE profile_id=?", (pid,))
+            self.db.execute("DELETE FROM profile_analyses WHERE profile_id=?", (pid,))
+            self.db.execute("DELETE FROM profiles WHERE id=?", (pid,))
+            self.db.commit()
+            self.db.execute("PRAGMA foreign_keys = ON")
             self.send_json({'deleted': pid})
         except Exception as e:
-            db.rollback()
+            self.db.rollback()
             self.send_err(str(e), 500)
-        finally:
-            db.close()
 
     # ── PROFILE ANALYSES ─────────────────────────────────────
     def get_profile_analyses(self, qs={}):
-        db = get_db()
         sql = "SELECT * FROM profile_analyses"
         params = []
         if qs.get('profile_id'):
             sql += ' WHERE profile_id=?'; params.append(qs['profile_id'][0])
         sql += ' ORDER BY created_at DESC'
-        rows = db.execute(sql, params).fetchall()
-        db.close()
+        rows = self.db.execute(sql, params).fetchall()
         self.send_json(rows_to_list(rows))
 
     def create_profile_analysis(self):
         body = self.read_body()
-        db = get_db()
-        cur = db.execute("""
+        cur = self.db.execute("""
             INSERT INTO profile_analyses(profile_id,expected_views,total_30d_posts,
               cache_score,content_target_score,country_target_score)
             VALUES(?,?,?,?,?,?)""",
@@ -931,14 +903,12 @@ class Handler(BaseHTTPRequestHandler):
              body.get('total_30d_posts',0), body.get('cache_score'),
              body.get('content_target_score'), body.get('country_target_score'))
         )
-        db.commit()
-        row = db.execute("SELECT * FROM profile_analyses WHERE id=?", (cur.lastrowid,)).fetchone()
-        db.close()
+        self.db.commit()
+        row = self.db.execute("SELECT * FROM profile_analyses WHERE id=?", (cur.lastrowid,)).fetchone()
         self.send_json(dict(row), 201)
 
     # ── CONTRACT ENDPOINTS ───────────────────────────────────
     def get_contracts(self, qs={}):
-        db = get_db()
         sql = """
             SELECT c.*,
               lv_st.value AS status, lv_st.code AS status_code,
@@ -967,13 +937,11 @@ class Handler(BaseHTTPRequestHandler):
         if where:
             sql += ' WHERE ' + ' AND '.join(where)
         sql += ' ORDER BY c.created_at DESC'
-        rows = db.execute(sql, params).fetchall()
-        db.close()
+        rows = self.db.execute(sql, params).fetchall()
         self.send_json(rows_to_list(rows))
 
     def get_contract(self, cid):
-        db = get_db()
-        row = db.execute("""
+        row = self.db.execute("""
             SELECT c.*, lv_st.value AS status, lv_st.code AS status_code,
               lv_cur.value AS currency, lv_cur.code AS currency_code,
               p.handle, p.ambassador_id
@@ -983,14 +951,12 @@ class Handler(BaseHTTPRequestHandler):
             LEFT JOIN list_values lv_cur ON lv_cur.id = c.currency_id
             WHERE c.id=?
         """, (cid,)).fetchone()
-        db.close()
         if not row: return self.send_err('Not found', 404)
         self.send_json(dict(row))
 
     def create_contract(self):
         body = self.read_body()
-        db = get_db()
-        cur = db.execute("""
+        cur = self.db.execute("""
             INSERT INTO contracts(profile_id,status_id,currency_id,
               price_per_standard_post,price_per_top_post,
               monthly_standard_posts,monthly_top_posts,signing_at,end_at)
@@ -1000,15 +966,13 @@ class Handler(BaseHTTPRequestHandler):
              body.get('monthly_standard_posts',0), body.get('monthly_top_posts',0),
              body.get('signing_at'), body.get('end_at'))
         )
-        db.commit()
-        row = db.execute("SELECT * FROM contracts WHERE id=?", (cur.lastrowid,)).fetchone()
-        db.close()
+        self.db.commit()
+        row = self.db.execute("SELECT * FROM contracts WHERE id=?", (cur.lastrowid,)).fetchone()
         self.send_json(dict(row), 201)
 
     def update_contract(self, cid):
         body = self.read_body()
-        db = get_db()
-        db.execute("""UPDATE contracts SET status_id=?,currency_id=?,
+        self.db.execute("""UPDATE contracts SET status_id=?,currency_id=?,
               price_per_standard_post=?,price_per_top_post=?,
               monthly_standard_posts=?,monthly_top_posts=?,
               signing_at=?,end_at=? WHERE id=?""",
@@ -1016,26 +980,21 @@ class Handler(BaseHTTPRequestHandler):
              body.get('price_per_standard_post'), body.get('price_per_top_post'),
              body.get('monthly_standard_posts',0), body.get('monthly_top_posts',0),
              body.get('signing_at'), body.get('end_at'), cid))
-        db.commit()
-        row = db.execute("SELECT * FROM contracts WHERE id=?", (cid,)).fetchone()
-        db.close()
+        self.db.commit()
+        row = self.db.execute("SELECT * FROM contracts WHERE id=?", (cid,)).fetchone()
         self.send_json(dict(row))
 
     def delete_contract(self, cid):
-        db = get_db()
         try:
-            db.execute("DELETE FROM contracts WHERE id=?", (cid,))
-            db.commit()
+            self.db.execute("DELETE FROM contracts WHERE id=?", (cid,))
+            self.db.commit()
             self.send_json({'deleted': cid})
         except Exception as e:
-            db.rollback()
+            self.db.rollback()
             self.send_err(str(e), 500)
-        finally:
-            db.close()
 
     # ── POST ENDPOINTS ───────────────────────────────────────
     def get_posts(self, qs={}):
-        db = get_db()
         sql = """
             SELECT po.*,
               lv_mt.value AS mention_type, lv_mt.code AS mention_type_code,
@@ -1063,13 +1022,11 @@ class Handler(BaseHTTPRequestHandler):
         if where:
             sql += ' WHERE ' + ' AND '.join(where)
         sql += ' GROUP BY po.id ORDER BY po.published_at DESC'
-        rows = db.execute(sql, params).fetchall()
-        db.close()
+        rows = self.db.execute(sql, params).fetchall()
         self.send_json(rows_to_list(rows))
 
     def get_post(self, pid):
-        db = get_db()
-        row = db.execute("""
+        row = self.db.execute("""
             SELECT po.*, lv_mt.value AS mention_type, lv_mt.code AS mention_type_code,
               p.handle, p.ambassador_id,
               COALESCE(SUM(pvh.new_views),0) AS total_views
@@ -1079,15 +1036,13 @@ class Handler(BaseHTTPRequestHandler):
             LEFT JOIN post_views_history pvh ON pvh.post_id=po.id
             WHERE po.id=? GROUP BY po.id
         """, (pid,)).fetchone()
-        db.close()
         if not row: return self.send_err('Not found', 404)
         self.send_json(dict(row))
 
     def create_post(self):
         body = self.read_body()
-        db = get_db()
         # Usamos ON CONFLICT para actualizar si ya existe, manteniendo el mismo ID y las estadísticas
-        cur = db.execute("""
+        cur = self.db.execute("""
             INSERT INTO posts(profile_id,url,mention_type_id,mention_offset,content_score,published_at)
             VALUES(?,?,?,?,?,?)
             ON CONFLICT(url) DO UPDATE SET
@@ -1097,9 +1052,8 @@ class Handler(BaseHTTPRequestHandler):
                 published_at=excluded.published_at
         """, (body.get('profile_id'), body.get('url'), body.get('mention_type_id'),
               body.get('mention_offset',0), body.get('content_score'), body.get('published_at')))
-        db.commit()
+        self.db.commit()
         # Buscamos el post por URL (que es única) en lugar de lastrowid para evitar errores con UPSERT
-        row = db.execute("SELECT * FROM posts WHERE url=?", (body.get('url'),)).fetchone()
         db.close()
         if not row: return self.send_err('Error al recuperar el post guardado', 500)
         self.send_json(dict(row), 201)
