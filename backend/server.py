@@ -1387,7 +1387,7 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     init_db()
     print("\n" + "="*40)
-    print("🚀 AMBASSADORS SERVER — NO PHONE")
+    print("🚀 AMBASSADORS BACKOFFICE")
     print("="*40 + "\n")
     server = http.server.HTTPServer(("", PORT), Handler)
     print(f"🚀 Server ready at http://localhost:{PORT}")
