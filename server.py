@@ -545,6 +545,7 @@ class Handler(BaseHTTPRequestHandler):
             return int(m.group(1)) if m else None
 
         try:
+            if path == '/api/version': return self.send_json({'version': '2.0.3_fixed_delete'})
             if path == '/api/lists' and method == 'GET':
                 return self.get_lists()
             if path == '/api/list_values' and method == 'GET':
