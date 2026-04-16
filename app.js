@@ -517,7 +517,58 @@ async function renderDetailOverview() {
   const totalViews = posts.reduce((s, p) => s + (p.total_views || 0), 0);
   const avgScore   = posts.length ? posts.reduce((s, p) => s + (p.content_score || 0), 0) / posts.length : 0;
 
+  // ── Expected revenue via official formula ──────────────────
+  let expectedRev = 0;
+  await Promise.all(contracts.map(async c => {
+    const paList = await GET('/profile_analyses', { profile_id: c.profile_id }).catch(() => []);
+    const pa = paList[0] || null;
+    const profile = await GET(`/profiles/${c.profile_id}`).catch(() => null);
+    expectedRev += calcExpectedRevenue(
+      pa, profile?.platform_code,
+      c.monthly_standard_posts, c.monthly_top_posts, a.country_code
+    );
+  }));
 
+  document.getElementById('ov-views').textContent   = fmt(totalViews, 'compact');
+  document.getElementById('ov-posts').textContent   = posts.length;
+  document.getElementById('ov-score').textContent   = avgScore.toFixed(2);
+  document.getElementById('ov-revenue').textContent = fmt(expectedRev, 'currency');
+
+  // ── Status badge ──────────────────────────────────────────
+  const latestContract = contracts[0];
+  const statusCode     = latestContract?.status_code || '';
+  const statusLabel    = latestContract?.status || '—';
+  document.getElementById('detail-status-badge').innerHTML = latestContract
+    ? statusBadge(statusCode, statusLabel)
+    : '<span class="badge badge-inactive">Sin contrato</span>';
+
+  // ── Mini bar chart: real daily views ─────────────────────
+  destroyChart('amb-views');
+  const ctx = document.getElementById('canvas-ambassador-views');
+  if (ctx) {
+    const dailyMap = {};
+    await Promise.all(posts.map(async p => {
+      const views = await GET('/post_views', { post_id: p.id }).catch(() => []);
+      views.forEach(v => {
+        dailyMap[v.views_date] = (dailyMap[v.views_date] || 0) + (v.new_views || 0);
+      });
+    }));
+    const labels = [], values = [];
+    const now = new Date();
+    for (let i = 29; i >= 0; i--) {
+      const d   = new Date(now); d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      labels.push(d.toLocaleDateString('es-ES', { month: 'short', day: 'numeric' }));
+      values.push(dailyMap[key] || 0);
+    }
+    chartInstances['amb-views'] = new Chart(ctx, {
+      type: 'bar',
+      data: { labels, datasets: [{ label: 'Views', data: values,
+        backgroundColor: 'rgba(139,92,246,0.5)', borderRadius: 3, borderSkipped: false }] },
+      options: { ...baseOpts(), scales: { x: { display: false }, y: yAxis() } }
+    });
+  }
+}
 
 async function renderDetailProfiles() {
   const profiles = await GET('/profiles', { ambassador_id: selectedAmbassadorId }).catch(() => []);
