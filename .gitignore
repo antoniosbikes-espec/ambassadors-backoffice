@@ -6,11 +6,11 @@ __pycache__/
 .env
 .env.local
 
-# SQLite database (no subir la BBDD local, Railway genera la suya)
-backend/ambassadors.db
-backend/ambassadors.db-shm
-backend/ambassadors.db-wal
-ambassadors.db
+# SQLite database (NUNCA subir la BBDD — Railway genera la suya)
+*.db
+*.db-shm
+*.db-wal
+db/
 
 # macOS
 .DS_Store
