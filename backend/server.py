@@ -515,14 +515,13 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path   = parsed.path.rstrip('/')
         qs     = parse_qs(parsed.query)
+        print(f"🔍 API Request: {method} {path}")
 
-        # helper: extract id from path like /ambassadors/5
         def path_id(base):
             m = re.match(rf'^{base}/(\d+)$', path)
             return int(m.group(1)) if m else None
 
         try:
-            # ── /api/lists ──────────────────────────────────
             if path == '/api/lists' and method == 'GET':
                 return self.get_lists()
             if path == '/api/list_values' and method == 'GET':
@@ -1415,3 +1414,4 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\nStopping...")
         server.server_close()
+# Force redeploy 2
