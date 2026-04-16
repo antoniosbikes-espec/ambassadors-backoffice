@@ -618,7 +618,7 @@ class Handler(BaseHTTPRequestHandler):
                 db.close()
                 return self.send_json(rows_to_list(rows))
 
-            self.send_err('Not found', 404)
+            self.send_err(f'Not found: {method} {path}', 404)
 
         except Exception as e:
             import traceback; traceback.print_exc()
