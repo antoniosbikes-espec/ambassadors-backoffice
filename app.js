@@ -469,7 +469,7 @@ async function renderDetailOverview() {
   document.getElementById('ov-posts').textContent   = posts.length;
   document.getElementById('ov-score').textContent   = avgScore.toFixed(2);
   document.getElementById('ov-revenue').textContent = fmt(totalRev, 'currency');
-  document.getElementById('ov-notes').textContent   = a.notes || 'Sin notas.';
+
 
   // Status badge
   const latestContract = contracts[0];
@@ -604,7 +604,7 @@ document.getElementById('btn-new-ambassador').addEventListener('click', () => {
     <div class="form-row">
       <div class="form-group"><label class="form-label">Email *</label><input type="email" id="nf-email" placeholder="email@ejemplo.com" /></div>
     </div>
-    <div class="form-group"><label class="form-label">Notas</label><textarea id="nf-notes" rows="2" placeholder="Notas sobre el embajador..."></textarea></div>
+
     <div class="form-row">
       <div class="form-group"><label class="form-label">País</label><select id="nf-country" class="filter-select" style="width:100%;padding-right:28px">${listOptions('country','— País —')}</select></div>
       <div class="form-group"><label class="form-label">Idioma</label><select id="nf-lang" class="filter-select" style="width:100%;padding-right:28px">${listOptions('language','— Idioma —')}</select></div>
@@ -613,12 +613,12 @@ document.getElementById('btn-new-ambassador').addEventListener('click', () => {
     const first_name = document.getElementById('nf-name').value.trim();
     const last_name  = document.getElementById('nf-last').value.trim();
     const email      = document.getElementById('nf-email').value.trim();
-    const notes      = document.getElementById('nf-notes').value.trim();
+
     const country_id = document.getElementById('nf-country').value || null;
     const lang_id    = document.getElementById('nf-lang').value || null;
     if (!first_name || !email) { alert('Nombre y email son obligatorios'); return false; }
     try {
-      const res = await POST('/ambassadors', { email, first_name, last_name, country_id, primary_language_id: lang_id, notes });
+      const res = await POST('/ambassadors', { email, first_name, last_name, country_id, primary_language_id: lang_id });
       if (res && res.id) selectedAmbassadorId = res.id;
       await renderAmbassadors();
       return true;
@@ -642,7 +642,7 @@ document.getElementById('btn-edit-ambassador').addEventListener('click', async (
     <div class="form-row">
       <div class="form-group"><label class="form-label">Email *</label><input type="email" id="ef-email" value="${a.email}" /></div>
     </div>
-    <div class="form-group"><label class="form-label">Notas</label><textarea id="ef-notes" rows="2" placeholder="Notas sobre el embajador...">${a.notes || ''}</textarea></div>
+
     <div class="form-row">
       <div class="form-group"><label class="form-label">País</label><select id="ef-country" class="filter-select" style="width:100%">${listOptions('country','— País —', a.country_id)}</select></div>
       <div class="form-group"><label class="form-label">Idioma</label><select id="ef-lang" class="filter-select" style="width:100%">${listOptions('language','— Idioma —', a.primary_language_id)}</select></div>
@@ -651,13 +651,13 @@ document.getElementById('btn-edit-ambassador').addEventListener('click', async (
     const first_name = document.getElementById('ef-name').value.trim();
     const last_name  = document.getElementById('ef-last').value.trim();
     const email      = document.getElementById('ef-email').value.trim();
-    const notes      = document.getElementById('ef-notes').value.trim();
+
     const country_id = document.getElementById('ef-country').value || null;
     const lang_id    = document.getElementById('ef-lang').value || null;
     
     if (!first_name || !email) { alert('Nombre y email son obligatorios'); return false; }
     try {
-      await PUT(`/ambassadors/${selectedAmbassadorId}`, { email, first_name, last_name, country_id, primary_language_id: lang_id, notes });
+      await PUT(`/ambassadors/${selectedAmbassadorId}`, { email, first_name, last_name, country_id, primary_language_id: lang_id });
       await renderAmbassadors();
       return true;
     } catch (e) {

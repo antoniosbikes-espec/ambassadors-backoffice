@@ -683,7 +683,7 @@ class Handler(BaseHTTPRequestHandler):
     def get_ambassadors(self, qs={}):
         db = get_db()
         sql = """
-            SELECT a.id, a.email, a.first_name, a.last_name, a.primary_language_id, a.country_id, a.notes, a.created_at,
+            SELECT a.id, a.email, a.first_name, a.last_name, a.primary_language_id, a.country_id, a.created_at,
               lv_lang.value  AS language,
               lv_lang.code   AS language_code,
               lv_country.value AS country,
@@ -731,7 +731,7 @@ class Handler(BaseHTTPRequestHandler):
     def get_ambassador(self, aid):
         db = get_db()
         row = db.execute("""
-            SELECT a.id, a.email, a.first_name, a.last_name, a.primary_language_id, a.country_id, a.notes, a.created_at,
+            SELECT a.id, a.email, a.first_name, a.last_name, a.primary_language_id, a.country_id, a.created_at,
               lv_lang.value  AS language, lv_lang.code AS language_code,
               lv_country.value AS country, lv_country.code AS country_code
             FROM ambassadors a
@@ -747,13 +747,12 @@ class Handler(BaseHTTPRequestHandler):
         body = self.read_body()
         db = get_db()
         cur = db.execute(
-            "INSERT INTO ambassadors(email,first_name,last_name,primary_language_id,country_id,notes) VALUES(?,?,?,?,?,?)",
+            "INSERT INTO ambassadors(email,first_name,last_name,primary_language_id,country_id) VALUES(?,?,?,?,?)",
             (body.get('email'), body.get('first_name'), body.get('last_name'),
-             body.get('primary_language_id'), body.get('country_id'),
-             body.get('notes'))
+             body.get('primary_language_id'), body.get('country_id'))
         )
         db.commit()
-        row = db.execute("SELECT id, email, first_name, last_name, primary_language_id, country_id, notes, created_at FROM ambassadors WHERE id=?", (cur.lastrowid,)).fetchone()
+        row = db.execute("SELECT id, email, first_name, last_name, primary_language_id, country_id, created_at FROM ambassadors WHERE id=?", (cur.lastrowid,)).fetchone()
         db.close()
         self.send_json(dict(row), 201)
 
@@ -761,12 +760,11 @@ class Handler(BaseHTTPRequestHandler):
         body = self.read_body()
         db = get_db()
         db.execute("""UPDATE ambassadors SET email=?,first_name=?,last_name=?,
-                      primary_language_id=?,country_id=?,notes=? WHERE id=?""",
+                      primary_language_id=?,country_id=? WHERE id=?""",
                    (body.get('email'), body.get('first_name'), body.get('last_name'),
-                    body.get('primary_language_id'), body.get('country_id'),
-                    body.get('notes'), aid))
+                    body.get('primary_language_id'), body.get('country_id'), aid))
         db.commit()
-        row = db.execute("SELECT id, email, first_name, last_name, primary_language_id, country_id, notes, created_at FROM ambassadors WHERE id=?", (aid,)).fetchone()
+        row = db.execute("SELECT id, email, first_name, last_name, primary_language_id, country_id, created_at FROM ambassadors WHERE id=?", (aid,)).fetchone()
         db.close()
         self.send_json(dict(row))
 
@@ -872,10 +870,19 @@ class Handler(BaseHTTPRequestHandler):
 
     def delete_profile(self, pid):
         db = get_db()
-        db.execute("DELETE FROM profiles WHERE id=?", (pid,))
-        db.commit()
-        db.close()
-        self.send_json({'deleted': pid})
+        try:
+            db.execute("DELETE FROM post_views_history WHERE post_id IN (SELECT id FROM posts WHERE profile_id=?)", (pid,))
+            db.execute("DELETE FROM posts WHERE profile_id=?", (pid,))
+            db.execute("DELETE FROM contracts WHERE profile_id=?", (pid,))
+            db.execute("DELETE FROM profile_analyses WHERE profile_id=?", (pid,))
+            db.execute("DELETE FROM profiles WHERE id=?", (pid,))
+            db.commit()
+            self.send_json({'deleted': pid})
+        except Exception as e:
+            db.rollback()
+            raise e
+        finally:
+            db.close()
 
     # ── PROFILE ANALYSES ─────────────────────────────────────
     def get_profile_analyses(self, qs={}):
@@ -1082,10 +1089,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def delete_post(self, pid):
         db = get_db()
-        db.execute("DELETE FROM posts WHERE id=?", (pid,))
-        db.commit()
-        db.close()
-        self.send_json({'deleted': pid})
+        try:
+            db.execute("DELETE FROM post_views_history WHERE post_id=?", (pid,))
+            db.execute("DELETE FROM posts WHERE id=?", (pid,))
+            db.commit()
+            self.send_json({'deleted': pid})
+        except Exception as e:
+            db.rollback()
+            raise e
+        finally:
+            db.close()
 
     # ── POST VIEWS ───────────────────────────────────────────
     def get_post_views(self, qs={}):
@@ -1226,15 +1239,72 @@ class Handler(BaseHTTPRequestHandler):
             {w_sql_s}
         """, params).fetchone()[0] or 0
 
-        # Revenue Esperado (basado en contratos firmados)
-        expected_revenue = db.execute(f"""
-            SELECT SUM((c.price_per_standard_post * c.monthly_standard_posts) + 
-                       (c.price_per_top_post * c.monthly_top_posts))
+        # Revenue Esperado (NUEVA FÓRMULA PERFORMANCE-BASED)
+        w_sql_s, _ = build_where(["lv_s.code='signed'"])
+        rows_perf = db.execute(f"""
+            SELECT 
+                c.monthly_standard_posts, c.monthly_top_posts,
+                pa.expected_views, pa.cache_score, pa.content_target_score, pa.country_target_score,
+                lv_plat.code AS platform_code,
+                lv_country.code AS country_code
             {base_from}
             JOIN contracts c ON c.profile_id = p.id
             JOIN list_values lv_s ON lv_s.id = c.status_id
+            LEFT JOIN list_values lv_plat ON lv_plat.id = p.platform_id
+            LEFT JOIN list_values lv_country ON lv_country.id = a.country_id
+            LEFT JOIN profile_analyses pa ON pa.id = COALESCE(c.last_analysis_id, 
+                (SELECT id FROM profile_analyses WHERE profile_id=p.id ORDER BY created_at DESC LIMIT 1))
             {w_sql_s}
-        """, params).fetchone()[0] or 0
+        """, params).fetchall()
+        
+        # Multiplicadores oficiales (RPU/1.50)
+        COUNTRY_RPM_MULT = {
+            'MX': 1.00, 'ES': 1.33, 'CO': 0.53, 'CL': 0.53, 'BR': 0.33,
+            'DE': 3.00, 'FR': 1.47, 'IT': 2.67, 'PT': 0.72, 'UK': 3.00,
+            'US': 5.00, 'AU': 3.67, 'CA': 3.67, 'AR': 0.40, 'CO': 0.53,
+            'FR': 1.47, 'IE': 3.00 # Irlanda -> 3.00 (similar UK)
+        }
+        # Multiplicador Latam por defecto (0.40)
+        LATAM_CODES = ['AR', 'CO', 'CL', 'PE', 'EC', 'VE', 'UY', 'PY', 'BO', 'GT', 'HN', 'SV', 'NI', 'CR', 'PA', 'DO', 'PR']
+        
+        expected_revenue = 0
+        for r in rows_perf:
+            ev = r['expected_views'] or 0
+            if ev == 0: continue
+            
+            # 1. Country Multiplier
+            c_code = (r['country_code'] or '').upper()
+            country_mult = COUNTRY_RPM_MULT.get(c_code)
+            if country_mult is None:
+                if c_code in LATAM_CODES: country_mult = 0.40
+                else: country_mult = 0.12 # Developing / Default
+            
+            # 2. Cache Multiplier (LOW: 0.8 / MID: 1.0 / HIGH: 1.2)
+            c_score = r['cache_score'] or 0.6
+            cache_mult = 1.0
+            if c_score < 0.4: cache_mult = 0.8
+            elif c_score > 0.75: cache_mult = 1.2
+            
+            # 3. Target Scores (Content & Country)
+            cts = r['content_target_score'] or 1.0
+            cots = r['country_target_score'] or 0.6
+            cots_adj = min(cots / 0.6, 1.0)
+            
+            # Base logic: Views/1000 * 42 (Reference RPM)
+            base_val_post = (ev / 1000.0) * 42.0 * country_mult * cache_mult * cts * cots_adj
+            
+            # 4. Platform/Type Multipliers
+            p_code = (r['platform_code'] or '').lower()
+            m_std = r['monthly_standard_posts'] or 0
+            m_top = r['monthly_top_posts'] or 0
+            
+            if p_code == 'youtube':
+                expected_revenue += (base_val_post * 2.5 * m_std) + (base_val_post * 4.0 * m_top)
+            elif p_code == 'tiktok':
+                expected_revenue += (base_val_post * 1.0 * (m_std + m_top))
+            else:
+                # Other post types -> 0 según especificación
+                expected_revenue += 0
 
         # Revenue Real (basado en tabla revenues y fechas)
         rev_where_parts = ["r.views_date >= date('now', ?)"]
@@ -1317,7 +1387,7 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     init_db()
     print("\n" + "="*40)
-    print("🚀 AMBASSADORS SERVER v1.2 — NO PHONE")
+    print("🚀 AMBASSADORS SERVER — NO PHONE")
     print("="*40 + "\n")
     server = http.server.HTTPServer(("", PORT), Handler)
     print(f"🚀 Server ready at http://localhost:{PORT}")
