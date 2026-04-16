@@ -999,10 +999,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def delete_contract(self, cid):
         db = get_db()
-        db.execute("DELETE FROM contracts WHERE id=?", (cid,))
-        db.commit()
-        db.close()
-        self.send_json({'deleted': cid})
+        try:
+            db.execute("DELETE FROM contracts WHERE id=?", (cid,))
+            db.commit()
+            self.send_json({'deleted': cid})
+        except Exception as e:
+            db.rollback()
+            self.send_err(str(e), 500)
+        finally:
+            db.close()
 
     # ── POST ENDPOINTS ───────────────────────────────────────
     def get_posts(self, qs={}):
