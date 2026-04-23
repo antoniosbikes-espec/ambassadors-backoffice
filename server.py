@@ -39,6 +39,30 @@ except:
 
 PORT    = int(os.environ.get('PORT', 8787))
 
+# ── Seguridad: leer secretos desde variables de entorno ──────
+# En Railway: Settings → Variables → añadir AUTH_TOKEN y APP_PASSWORD
+AUTH_TOKEN = os.environ.get('AUTH_TOKEN', 'regaliz-marketing-token-2024')
+APP_USERNAME = os.environ.get('APP_USERNAME', 'marketing')
+APP_PASSWORD = os.environ.get('APP_PASSWORD', 'regaliz1')
+USER_CREDENTIALS = {APP_USERNAME: APP_PASSWORD}
+
+# ── CORS: restringir al dominio de producción ─────────────────
+# Permite también localhost para desarrollo local
+ALLOWED_ORIGINS = [
+    'https://antoniosbikes-ambassadors.netlify.app',
+    'http://localhost:3000',
+    'http://localhost:8080',
+    'http://127.0.0.1:5500',  # Live Server de VS Code
+    'null',                    # Apertura directa de index.html local
+]
+
+def get_cors_origin(request_origin):
+    """Devuelve el origen permitido o el primero de la lista como fallback."""
+    if request_origin and request_origin in ALLOWED_ORIGINS:
+        return request_origin
+    # En desarrollo local sin Origin header, devolver el primero
+    return ALLOWED_ORIGINS[0]
+
 # ─────────────────────────────────────────────────────────────
 # DATABASE — SCHEMA + SEED
 # ─────────────────────────────────────────────────────────────
@@ -487,13 +511,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def send_json(self, data, code=200):
         body = json.dumps(data, ensure_ascii=False, default=str).encode('utf-8')
+        origin = self.headers.get('Origin', '')
         self.send_response(code)
         self.send_header('Content-Type', 'application/json; charset=utf-8')
         self.send_header('Content-Length', str(len(body)))
-        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Origin', get_cors_origin(origin))
         self.send_header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-        self.send_header('X-Server-Version', '2.0.2')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+        self.send_header('Vary', 'Origin')
+        self.send_header('X-Content-Type-Options', 'nosniff')
+        self.send_header('X-Server-Version', '2.0.5_secure')
         self.end_headers()
         self.wfile.write(body)
 
@@ -510,10 +537,12 @@ class Handler(BaseHTTPRequestHandler):
             return {}
 
     def do_OPTIONS(self):
+        origin = self.headers.get('Origin', '')
         self.send_response(204)
-        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Origin', get_cors_origin(origin))
         self.send_header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+        self.send_header('Vary', 'Origin')
         self.end_headers()
 
     def do_HEAD(self):
@@ -530,13 +559,37 @@ class Handler(BaseHTTPRequestHandler):
     def do_DELETE(self): self.handle_method('DELETE')
 
     def handle_method(self, method):
-        # Abrir DB al inicio de la petición
+        # 1. Rutas públicas (Login)
+        parsed = urlparse(self.path)
+        path = parsed.path.rstrip('/')
+        
+        if path == '/api/login' and method == 'POST':
+            return self.handle_login()
+
+        # 2. Verificar Autenticación para el resto
+        auth_header = self.headers.get('Authorization', '')
+        if not auth_header.startswith('Bearer ') or auth_header[7:] != AUTH_TOKEN:
+            return self.send_err('Unauthorized', 401)
+
+        # 3. Abrir DB y enrutar
         self.db = get_db()
         try:
             self.route(method)
         finally:
-            # Asegurar cierre de DB al final de la petición, pase lo que pase
             self.db.close()
+
+    def handle_login(self):
+        body = self.read_body()
+        username = body.get('username')
+        password = body.get('password')
+        
+        if USER_CREDENTIALS.get(username) == password:
+            self.send_json({
+                'token': AUTH_TOKEN,
+                'user': {'username': username, 'role': 'marketing'}
+            })
+        else:
+            self.send_err('Usuario o contraseña incorrectos', 401)
 
     def route(self, method):
         parsed = urlparse(self.path)

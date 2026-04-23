@@ -1,0 +1,18 @@
+/*
+  # Evita que la app se cargue en un iframe (clickjacking)
+  X-Frame-Options: DENY
+
+  # Evita que el navegador detecte el tipo MIME incorrectamente
+  X-Content-Type-Options: nosniff
+
+  # Controla qué información de referencia se envía
+  Referrer-Policy: strict-origin-when-cross-origin
+
+  # Limita el acceso a funciones sensibles del navegador
+  Permissions-Policy: geolocation=(), microphone=(), camera=()
+
+  # Content Security Policy: solo recursos del propio dominio y CDNs declarados
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://ambassadors-backoffice-production.up.railway.app; img-src 'self' data:; frame-ancestors 'none';
+
+  # HSTS: fuerza HTTPS durante 1 año
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
