@@ -4,7 +4,8 @@ Ambassadors Back Office — REST API Server
 Python 3 + SQLite (stdlib only, no pip required)
 """
 
-import sqlite3, json, os, sys, re
+import sqlite3, json, os, sys, re, time
+from threading import Lock
 import http.server
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime, timezone
@@ -502,6 +503,40 @@ def rows_to_list(rows):
     return [dict(r) for r in rows]
 
 # ─────────────────────────────────────────────────────────────
+# RATE LIMITING — Protección contra fuerza bruta en login
+# ─────────────────────────────────────────────────────────────
+MAX_LOGIN_ATTEMPTS = 5          # Intentos antes de bloquear
+LOCKOUT_SECONDS    = 15 * 60   # 15 minutos de bloqueo
+
+_login_attempts = {}   # { ip: {'count': int, 'locked_until': float} }
+_login_lock     = Lock()
+
+def check_rate_limit(ip):
+    """Devuelve (bloqueado, segundos_restantes)."""
+    with _login_lock:
+        now  = time.time()
+        data = _login_attempts.get(ip, {'count': 0, 'locked_until': 0})
+        if data['locked_until'] > now:
+            return True, int(data['locked_until'] - now)
+        if data['locked_until'] and data['locked_until'] <= now:
+            _login_attempts[ip] = {'count': 0, 'locked_until': 0}
+        return False, 0
+
+def record_failed_login(ip):
+    with _login_lock:
+        now  = time.time()
+        data = _login_attempts.get(ip, {'count': 0, 'locked_until': 0})
+        data['count'] += 1
+        if data['count'] >= MAX_LOGIN_ATTEMPTS:
+            data['locked_until'] = now + LOCKOUT_SECONDS
+            print(f"[SECURITY] IP {ip} bloqueada 15 min tras {MAX_LOGIN_ATTEMPTS} intentos fallidos")
+        _login_attempts[ip] = data
+
+def reset_login_attempts(ip):
+    with _login_lock:
+        _login_attempts.pop(ip, None)
+
+# ─────────────────────────────────────────────────────────────
 # HTTP HANDLER
 # ─────────────────────────────────────────────────────────────
 
@@ -579,16 +614,29 @@ class Handler(BaseHTTPRequestHandler):
             self.db.close()
 
     def handle_login(self):
-        body = self.read_body()
+        ip = self.client_address[0]
+
+        # Comprobar rate limit antes de validar credenciales
+        blocked, remaining = check_rate_limit(ip)
+        if blocked:
+            mins = max(remaining // 60, 1)
+            return self.send_err(
+                f'Demasiados intentos fallidos. Espera {mins} minuto{"s" if mins != 1 else ""} e inténtalo de nuevo.',
+                429
+            )
+
+        body     = self.read_body()
         username = body.get('username')
         password = body.get('password')
-        
+
         if USER_CREDENTIALS.get(username) == password:
+            reset_login_attempts(ip)  # Login OK: resetear contador
             self.send_json({
                 'token': AUTH_TOKEN,
                 'user': {'username': username, 'role': 'marketing'}
             })
         else:
+            record_failed_login(ip)   # Login fallido: sumar intento
             self.send_err('Usuario o contraseña incorrectos', 401)
 
     def route(self, method):
