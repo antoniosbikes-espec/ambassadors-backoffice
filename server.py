@@ -49,7 +49,7 @@ USER_CREDENTIALS = {APP_USERNAME: APP_PASSWORD}
 # ── CORS: restringir al dominio de producción ─────────────────
 # Permite también localhost para desarrollo local
 ALLOWED_ORIGINS = [
-    'https://antoniosbikes-ambassadors.netlify.app',
+    'https://ambasadors.netlify.app',
     'http://localhost:3000',
     'http://localhost:8080',
     'http://127.0.0.1:5500',  # Live Server de VS Code
