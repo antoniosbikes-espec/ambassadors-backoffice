@@ -924,7 +924,8 @@ window.editPost = async (pid) => {
     const url = document.getElementById('ep-url').value.trim();
     const mention_type_id = parseInt(document.getElementById('ep-mention').value) || null;
     const published_at = document.getElementById('ep-date').value || null;
-    const content_score = parseFloat(document.getElementById('ep-score').value) || null;
+    const scoreVal = document.getElementById('ep-score').value;
+    const content_score = scoreVal !== '' ? parseFloat(scoreVal) : null;
     const mention_offset = parseInt(document.getElementById('ep-offset').value) || 0;
     
     if (!url) { alert('URL es obligatoria'); return false; }
@@ -1203,7 +1204,8 @@ function openNewPostModal() {
       const mention_type_id = parseInt(document.getElementById('nc-mention').value) || null;
       const published_at = document.getElementById('nc-date').value || null;
       const views = parseInt(document.getElementById('nc-views').value) || 0;
-      const content_score = parseFloat(document.getElementById('nc-score').value) || null;
+      const scoreVal = document.getElementById('nc-score').value;
+      const content_score = scoreVal !== '' ? parseFloat(scoreVal) : null;
       const mention_offset = parseInt(document.getElementById('nc-offset').value) || 0;
       if (!url) { alert('URL es obligatoria'); return false; }
       try {
