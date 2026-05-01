@@ -879,7 +879,13 @@ async function renderDetailContent() {
     `<button class="btn-secondary btn-block" id="btn-add-content-detail" style="margin-top:12px">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       Registrar post
-    </button>`;
+    </button>
+    <button class="btn-secondary btn-block" id="btn-sync-views" style="margin-top:8px; border-color:var(--accent-purple); color:var(--accent-purple)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 12c0-4.4 3.6-8 8-8 3.3 0 6.2 2 7.4 4.9M22 12c0 4.4-3.6 8-8 8-3.3 0-6.2-2-7.4-4.9"/></svg>
+      Sincronizar Views (YouTube)
+    </button>
+    <p style="font-size:10px; color:var(--text-tertiary); text-align:center; margin-top:8px;">* Solo disponible para YouTube por ahora</p>
+    `;
 }
 
 window.deletePost = async (pid) => {
@@ -936,7 +942,26 @@ window.editPost = async (pid) => {
 // ── Delegación en tab-content ──────────────────────────────
 document.getElementById('tab-content').addEventListener('click', e => {
   if (e.target.closest('#btn-add-content-detail')) openNewPostModal();
+  if (e.target.closest('#btn-sync-views')) syncPostViews();
 });
+
+async function syncPostViews() {
+  const btn = document.getElementById('btn-sync-views');
+  const originalHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = 'Sincronizando...';
+  try {
+    const res = await POST('/posts/sync-views');
+    alert(`Sincronización completada. Posts actualizados: ${res.updated_posts || 0}`);
+    await renderDetailContent();
+    await renderDetailOverview();
+  } catch (e) {
+    alert('Error al sincronizar: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
+  }
+}
 
 // ─────────────────────────────────────────────────────────────
 // AMBASSADOR — ADD BUTTONS

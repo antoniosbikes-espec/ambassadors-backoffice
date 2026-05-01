@@ -4,7 +4,7 @@ Ambassadors Back Office — REST API Server
 Python 3 + SQLite (stdlib only, no pip required)
 """
 
-import sqlite3, json, os, sys, re, time
+import sqlite3, json, os, sys, re, time, urllib.request
 from threading import Lock
 import http.server
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -604,6 +604,47 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):  self.handle_method('GET')
+    # ── Utilidades de scraping para vistas reales ──────
+    def fetch_real_views(self, platform_code, url):
+        if not url: return None
+        try:
+            user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            if 'youtube.com' in url or 'youtu.be' in url:
+                req = urllib.request.Request(url, headers={'User-Agent': user_agent})
+                with urllib.request.urlopen(req, timeout=10) as response:
+                    html = response.read().decode('utf-8', errors='ignore')
+                    # YouTube viewCount en el JSON embebido del HTML
+                    match = re.search(r'"viewCount":"(\d+)"', html)
+                    if match:
+                        return int(match.group(1))
+            # TikTok/Instagram son muy difíciles sin API oficial, de momento solo YouTube
+        except Exception as e:
+            print(f"[Scraper] Error fetching {url}: {e}")
+        return None
+
+    def sync_all_views(self):
+        print("[Sync] Iniciando sincronización de visualizaciones reales...")
+        posts = self.db.execute("""
+            SELECT po.id, po.url, lv.code as platform_code 
+            FROM posts po
+            JOIN profiles p ON p.id = po.profile_id
+            JOIN list_values lv ON lv.id = p.platform_id
+        """).fetchall()
+        
+        updated = 0
+        for p in posts:
+            real_v = self.fetch_real_views(p['platform_code'], p['url'])
+            if real_v is not None:
+                # Guardar en el histórico (si es mayor que el anterior para no perder datos si falla el scrape)
+                last_v = self.db.execute("SELECT SUM(new_views) FROM post_views_history WHERE post_id=?", (p['id'],)).fetchone()[0] or 0
+                if real_v > last_v:
+                    diff = real_v - last_v
+                    self.db.execute("INSERT INTO post_views_history (post_id, new_views, views_date) VALUES (?, ?, date('now'))", (p['id'], diff))
+                    updated += 1
+        
+        self.db.commit()
+        self.send_json({"status": "success", "updated_posts": updated})
+
     def do_POST(self): self.handle_method('POST')
     def do_PUT(self):  self.handle_method('PUT')
     def do_DELETE(self): self.handle_method('DELETE')
@@ -723,6 +764,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.get_posts(qs)
             if path == '/api/posts' and method == 'POST':
                 return self.create_post()
+            if path == '/api/posts/sync-views' and method == 'POST':
+                return self.sync_all_views()
             pid = path_id('/api/posts')
             if pid:
                 if method == 'GET':    return self.get_post(pid)
