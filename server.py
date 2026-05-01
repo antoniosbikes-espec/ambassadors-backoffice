@@ -1510,27 +1510,28 @@ if __name__ == "__main__":
         print(f"[DB] Menciones actuales antes de migrar: {[dict(r) for r in current]}")
 
         # 2. Forzar actualización de Tipos de Mención
-        # Paso A: Renombrar los valores conocidos para que los posts antiguos se actualicen visualmente
+        # Paso A: Renombrar los valores conocidos (Dedicado, Integrado, etc) a los nuevos nombres
+        # Esto mantiene los IDs para que los posts antiguos se actualicen visualmente
         conn.execute("""
             UPDATE list_values SET value='M (Mention)', code='m_mention', is_active=1
-            WHERE list_id=(SELECT id FROM lists WHERE name='mention_type') 
+            WHERE list_id IN (SELECT id FROM lists WHERE name='mention_type') 
             AND (code='m_mention' OR code='dedicated' OR value='Dedicado' OR value='Dedicated')
         """)
         conn.execute("""
             UPDATE list_values SET value='OM (Organic Mention)', code='om_mention', is_active=1
-            WHERE list_id=(SELECT id FROM lists WHERE name='mention_type') 
+            WHERE list_id IN (SELECT id FROM lists WHERE name='mention_type') 
             AND (code='om_mention' OR code='integrated' OR value='Integrado' OR value='Integrated' OR value='Orgánico')
         """)
         conn.execute("""
             UPDATE list_values SET value='TikTok', code='tiktok', is_active=1
-            WHERE list_id=(SELECT id FROM lists WHERE name='mention_type') 
+            WHERE list_id IN (SELECT id FROM lists WHERE name='mention_type') 
             AND (code='tiktok' OR value='TikTok')
         """)
         
         # Paso B: DESACTIVAR TODO LO DEMÁS (Importante: COALESCE para tratar NULLs)
         conn.execute("""
             UPDATE list_values SET is_active=0 
-            WHERE list_id=(SELECT id FROM lists WHERE name='mention_type') 
+            WHERE list_id IN (SELECT id FROM lists WHERE name='mention_type') 
             AND COALESCE(code, '') NOT IN ('m_mention', 'om_mention', 'tiktok')
         """)
         
@@ -1543,7 +1544,7 @@ if __name__ == "__main__":
             # Por si ya existía pero con otro nombre o estaba inactivo
             conn.execute("""
                 UPDATE list_values SET value=?, is_active=1
-                WHERE code=? AND list_id=(SELECT id FROM lists WHERE name='mention_type')
+                WHERE code=? AND list_id IN (SELECT id FROM lists WHERE name='mention_type')
             """, (label, code))
         
         conn.commit()
@@ -1562,5 +1563,5 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\nStopping...")
         server.server_close()
-# Force redeploy - Update mention types 5 (Final Fix)
+# Force redeploy - Update mention types 6 (Robustness)
 
