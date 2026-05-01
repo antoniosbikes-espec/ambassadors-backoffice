@@ -38,11 +38,8 @@ try:
 except:
     pass
 
-PORT    = int(os.environ.get('PORT', 8787))
-
-# ── Seguridad: leer secretos desde variables de entorno ──────
-# En Railway: Settings → Variables → añadir AUTH_TOKEN y APP_PASSWORD
-AUTH_TOKEN = os.environ.get('AUTH_TOKEN', 'regaliz-marketing-token-2024')
+PORT         = int(os.environ.get('PORT', 8787))
+AUTH_TOKEN   = os.environ.get('AUTH_TOKEN', 'regaliz-marketing-token-2024')
 APP_USERNAME = os.environ.get('APP_USERNAME', 'marketing')
 APP_PASSWORD = os.environ.get('APP_PASSWORD', 'regaliz1')
 USER_CREDENTIALS = {APP_USERNAME: APP_PASSWORD}
@@ -672,6 +669,10 @@ class Handler(BaseHTTPRequestHandler):
         
         if path == '/api/login' and method == 'POST':
             return self.handle_login()
+        if path == '/api/ping':
+            return self.send_json({'status': 'ok', 'user_defined': APP_USERNAME != 'marketing'})
+        if path == '/api/ping':
+            return self.send_json({'status': 'ok'})
 
         # 2. Verificar Autenticación para el resto
         auth_header = self.headers.get('Authorization', '')
