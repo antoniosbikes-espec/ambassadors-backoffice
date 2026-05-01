@@ -1527,11 +1527,11 @@ if __name__ == "__main__":
             AND (code='tiktok' OR value='TikTok')
         """)
         
-        # Paso B: Desactivar cualquier otro que no sea uno de estos 3
+        # Paso B: DESACTIVAR TODO LO DEMÁS (Importante: COALESCE para tratar NULLs)
         conn.execute("""
             UPDATE list_values SET is_active=0 
             WHERE list_id=(SELECT id FROM lists WHERE name='mention_type') 
-            AND code NOT IN ('m_mention', 'om_mention', 'tiktok')
+            AND COALESCE(code, '') NOT IN ('m_mention', 'om_mention', 'tiktok')
         """)
         
         # Paso C: Asegurar que los 3 principales existen por si no estaban
@@ -1539,6 +1539,11 @@ if __name__ == "__main__":
             conn.execute("""
                 INSERT OR IGNORE INTO list_values (list_id, value, code, is_active)
                 SELECT id, ?, ?, 1 FROM lists WHERE name='mention_type'
+            """, (label, code))
+            # Por si ya existía pero con otro nombre o estaba inactivo
+            conn.execute("""
+                UPDATE list_values SET value=?, is_active=1
+                WHERE code=? AND list_id=(SELECT id FROM lists WHERE name='mention_type')
             """, (label, code))
         
         conn.commit()
@@ -1557,5 +1562,5 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\nStopping...")
         server.server_close()
-# Force redeploy - Update mention types 4 (with debug)
+# Force redeploy - Update mention types 5 (Final Fix)
 
