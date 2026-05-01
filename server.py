@@ -1510,36 +1510,39 @@ if __name__ == "__main__":
         print(f"[DB] Menciones actuales antes de migrar: {[dict(r) for r in current]}")
 
         # 2. Forzar actualización de Tipos de Mención
-        # Desactivar todos los que no sean los nuevos
+        # Paso A: Renombrar los valores conocidos para que los posts antiguos se actualicen visualmente
+        conn.execute("""
+            UPDATE list_values SET value='M (Mention)', code='m_mention', is_active=1
+            WHERE list_id=(SELECT id FROM lists WHERE name='mention_type') 
+            AND (code='m_mention' OR code='dedicated' OR value='Dedicado' OR value='Dedicated')
+        """)
+        conn.execute("""
+            UPDATE list_values SET value='OM (Organic Mention)', code='om_mention', is_active=1
+            WHERE list_id=(SELECT id FROM lists WHERE name='mention_type') 
+            AND (code='om_mention' OR code='integrated' OR value='Integrado' OR value='Integrated' OR value='Orgánico')
+        """)
+        conn.execute("""
+            UPDATE list_values SET value='TikTok', code='tiktok', is_active=1
+            WHERE list_id=(SELECT id FROM lists WHERE name='mention_type') 
+            AND (code='tiktok' OR value='TikTok')
+        """)
+        
+        # Paso B: Desactivar cualquier otro que no sea uno de estos 3
         conn.execute("""
             UPDATE list_values SET is_active=0 
             WHERE list_id=(SELECT id FROM lists WHERE name='mention_type') 
             AND code NOT IN ('m_mention', 'om_mention', 'tiktok')
         """)
         
-        # Asegurar que los 3 principales existen y están activos con el nombre correcto
+        # Paso C: Asegurar que los 3 principales existen por si no estaban
         for label, code in [('M (Mention)', 'm_mention'), ('OM (Organic Mention)', 'om_mention'), ('TikTok', 'tiktok')]:
-            # Intentar insertar si no existe
             conn.execute("""
                 INSERT OR IGNORE INTO list_values (list_id, value, code, is_active)
                 SELECT id, ?, ?, 1 FROM lists WHERE name='mention_type'
             """, (label, code))
-            # Forzar el nombre y estado activo por si ya existía con otro nombre/estado
-            conn.execute("""
-                UPDATE list_values SET value=?, is_active=1 
-                WHERE code=? AND list_id=(SELECT id FROM lists WHERE name='mention_type')
-            """, (label, code))
         
         conn.commit()
-        
-        # Verificar después
-        after = conn.execute("""
-            SELECT id, value, code, is_active FROM list_values 
-            WHERE list_id=(SELECT id FROM lists WHERE name='mention_type') AND is_active=1
-        """).fetchall()
-        print(f"[DB] Menciones activas después de migrar: {[dict(r) for r in after]}")
-        
-        print("[DB] Tipos de mención verificados y actualizados.")
+        print("[DB] Tipos de mención actualizados (M, OM, TikTok).")
     except Exception as e:
         print(f"[DB] Error en migración de menciones: {e}")
     finally:

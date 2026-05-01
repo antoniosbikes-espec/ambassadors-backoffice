@@ -43,6 +43,11 @@ async function init() {
   if (filterPlatform) filterPlatform.innerHTML = listCodeOptions('platform', '— Plataforma —');
   if (filterStatus) filterStatus.innerHTML = listCodeOptions('contract_status', '— Estado —');
 
+  const postFilterPlatform = document.getElementById('posts-filter-platform');
+  const postFilterMention = document.getElementById('posts-filter-mention');
+  if (postFilterPlatform) postFilterPlatform.innerHTML = listCodeOptions('platform', 'Plataforma');
+  if (postFilterMention) postFilterMention.innerHTML = listCodeOptions('mention_type', 'Tipo mención');
+
   // Rellenar filtros globales...
   const gCountry = document.getElementById('filter-country');
   const gNiche = document.getElementById('filter-niche');
