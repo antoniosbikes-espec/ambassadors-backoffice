@@ -608,16 +608,28 @@ class Handler(BaseHTTPRequestHandler):
     def fetch_real_views(self, platform_code, url):
         if not url: return None
         try:
-            user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
             if 'youtube.com' in url or 'youtu.be' in url:
                 req = urllib.request.Request(url, headers={'User-Agent': user_agent})
                 with urllib.request.urlopen(req, timeout=10) as response:
                     html = response.read().decode('utf-8', errors='ignore')
-                    # YouTube viewCount en el JSON embebido del HTML
+                    # Intentamos varios patrones comunes en el JSON de YouTube
                     match = re.search(r'"viewCount":"(\d+)"', html)
+                    if not match:
+                        match = re.search(r'\\\"viewCount\\\":\\\"(\d+)\\\"', html)
+                    if not match:
+                        # Patrón para shorts o versiones alternativas
+                        match = re.search(r'"videoViewCountRenderer":\s*{"viewCount":\s*{"simpleText":"([\d,.]+)', html)
+                        if match:
+                            views_str = re.sub(r'[^\d]', '', match.group(1))
+                            return int(views_str)
+                    
                     if match:
+                        print(f"[Scraper] OK: {url} -> {match.group(1)} views")
                         return int(match.group(1))
-            # TikTok/Instagram son muy difíciles sin API oficial, de momento solo YouTube
+                    else:
+                        print(f"[Scraper] No se encontró viewCount en {url}")
+            # TikTok/Instagram siguen siendo difíciles sin API
         except Exception as e:
             print(f"[Scraper] Error fetching {url}: {e}")
         return None
