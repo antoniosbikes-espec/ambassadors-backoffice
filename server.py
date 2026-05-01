@@ -1498,6 +1498,17 @@ if __name__ == "__main__":
     except: pass
 
     try:
+        # DEBUG: Ver las listas
+        lists = conn.execute("SELECT id, name FROM lists").fetchall()
+        print(f"[DB] Listas existentes: {[dict(l) for l in lists]}")
+
+        # DEBUG: Ver qué hay actualmente
+        current = conn.execute("""
+            SELECT id, value, code, is_active FROM list_values 
+            WHERE list_id=(SELECT id FROM lists WHERE name='mention_type')
+        """).fetchall()
+        print(f"[DB] Menciones actuales antes de migrar: {[dict(r) for r in current]}")
+
         # 2. Forzar actualización de Tipos de Mención
         # Desactivar todos los que no sean los nuevos
         conn.execute("""
@@ -1520,6 +1531,14 @@ if __name__ == "__main__":
             """, (label, code))
         
         conn.commit()
+        
+        # Verificar después
+        after = conn.execute("""
+            SELECT id, value, code, is_active FROM list_values 
+            WHERE list_id=(SELECT id FROM lists WHERE name='mention_type') AND is_active=1
+        """).fetchall()
+        print(f"[DB] Menciones activas después de migrar: {[dict(r) for r in after]}")
+        
         print("[DB] Tipos de mención verificados y actualizados.")
     except Exception as e:
         print(f"[DB] Error en migración de menciones: {e}")
@@ -1535,5 +1554,5 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\nStopping...")
         server.server_close()
-# Force redeploy - Update mention types 3
+# Force redeploy - Update mention types 4 (with debug)
 
