@@ -1588,17 +1588,20 @@ document.getElementById('btn-import-revenue')?.addEventListener('click', () => {
         const dateStr = parts[0];
         const countryCode = parts[1] || '';
         const currencyCode = parts[2] || '';
-        const amountStr = parts[3] !== undefined ? parts[3] : parts[parts.length - 1]; // Fallback
+        const amountStr = parts[3] || '';
+        const nicheCode = parts[4] || '';
 
         if (!dateStr || !amountStr) continue;
 
         const country = (LISTS.country || []).find(c => c.code && c.code.toUpperCase() === countryCode.toUpperCase());
         const currency = (LISTS.currency || []).find(c => c.code && c.code.toUpperCase() === currencyCode.toUpperCase());
+        const niche = (LISTS.niche || []).find(n => n.code && n.code.toUpperCase() === nicheCode.toUpperCase());
 
         await POST('/revenues', {
           views_date: dateStr,
           country_id: country ? country.id : null,
           currency_id: currency ? currency.id : null,
+          niche_id: niche ? niche.id : null,
           amount: parseFloat(amountStr) || 0
         }).catch(e => console.error('Error importando fila:', e));
 
