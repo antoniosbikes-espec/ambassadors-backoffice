@@ -904,7 +904,7 @@ window.editPost = async (pid) => {
     </div>
     <div class="form-group"><label class="form-label">URL del post *</label><input type="text" id="ep-url" value="${p.url || ''}" /></div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Tipo mención</label><select id="ep-mention" class="filter-select" style="width:100%;padding-right:28px">${listOptions('mention_type', p.mention_type_id)}</select></div>
+      <div class="form-group"><label class="form-label">Tipo mención</label><select id="ep-mention" class="filter-select" style="width:100%;padding-right:28px">${listOptions('mention_type', '', p.mention_type_id)}</select></div>
       <div class="form-group"><label class="form-label">Fecha publicación</label><input type="date" id="ep-date" value="${p.published_at ? p.published_at.slice(0, 10) : ''}" /></div>
     </div>
     <div class="form-row">
