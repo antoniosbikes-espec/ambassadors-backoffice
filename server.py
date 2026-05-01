@@ -144,6 +144,7 @@ CREATE TABLE IF NOT EXISTS contracts (
     last_analysis_id         INTEGER REFERENCES profile_analyses(id),
     signing_at               TEXT,
     end_at                   TEXT,
+    pdf_url                  TEXT,
     created_at               TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_con_profile ON contracts(profile_id);
@@ -933,6 +934,9 @@ class Handler(BaseHTTPRequestHandler):
             where.append('p.niche_id=?'); params.append(qs['niche_id'][0])
         if qs.get('niche_code'):
             where.append('lv_niche.code=?'); params.append(qs['niche_code'][0])
+        if qs.get('country_code'):
+            where.append('a.country_id = (SELECT id FROM list_values WHERE UPPER(code)=UPPER(?))')
+            params.append(qs['country_code'][0])
         if where:
             sql += ' WHERE ' + ' AND '.join(where)
         sql += ' ORDER BY a.first_name, p.id'
@@ -956,10 +960,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def create_profile(self):
         body = self.read_body()
+        url = body.get('url')
+        if url:
+            exists = self.db.execute("SELECT id FROM profiles WHERE url=?", (url,)).fetchone()
+            if exists:
+                return self.send_err('Ya existe un canal con esta URL', 400)
+                
         cur = self.db.execute(
             "INSERT INTO profiles(ambassador_id,platform_id,handle,url,niche_id) VALUES(?,?,?,?,?)",
             (body.get('ambassador_id'), body.get('platform_id'),
-             body.get('handle'), body.get('url'), body.get('niche_id'))
+             body.get('handle'), url, body.get('niche_id'))
         )
         self.db.commit()
         row = self.db.execute("SELECT * FROM profiles WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -1040,6 +1050,14 @@ class Handler(BaseHTTPRequestHandler):
             where.append('p.ambassador_id=?'); params.append(qs['ambassador_id'][0])
         if qs.get('status_code'):
             where.append('lv_st.code=?'); params.append(qs['status_code'][0])
+        if qs.get('country_code'):
+            where.append('a.country_id = (SELECT id FROM list_values WHERE UPPER(code)=UPPER(?))')
+            params.append(qs['country_code'][0])
+        if qs.get('niche_code'):
+            where.append('p.niche_id = (SELECT id FROM list_values WHERE UPPER(code)=UPPER(?))')
+            params.append(qs['niche_code'][0])
+        if qs.get('platform_code'):
+            where.append('lv_plat.code=?'); params.append(qs['platform_code'][0])
         if where:
             sql += ' WHERE ' + ' AND '.join(where)
         sql += ' ORDER BY c.created_at DESC'
@@ -1065,12 +1083,12 @@ class Handler(BaseHTTPRequestHandler):
         cur = self.db.execute("""
             INSERT INTO contracts(profile_id,status_id,currency_id,
               price_per_standard_post,price_per_top_post,
-              monthly_standard_posts,monthly_top_posts,signing_at,end_at)
-            VALUES(?,?,?,?,?,?,?,?,?)""",
+              monthly_standard_posts,monthly_top_posts,signing_at,end_at,pdf_url)
+            VALUES(?,?,?,?,?,?,?,?,?,?)""",
             (body.get('profile_id'), body.get('status_id'), body.get('currency_id'),
              body.get('price_per_standard_post'), body.get('price_per_top_post'),
              body.get('monthly_standard_posts',0), body.get('monthly_top_posts',0),
-             body.get('signing_at'), body.get('end_at'))
+             body.get('signing_at'), body.get('end_at'), body.get('pdf_url'))
         )
         self.db.commit()
         row = self.db.execute("SELECT * FROM contracts WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -1081,11 +1099,11 @@ class Handler(BaseHTTPRequestHandler):
         self.db.execute("""UPDATE contracts SET status_id=?,currency_id=?,
               price_per_standard_post=?,price_per_top_post=?,
               monthly_standard_posts=?,monthly_top_posts=?,
-              signing_at=?,end_at=? WHERE id=?""",
+              signing_at=?,end_at=?,pdf_url=? WHERE id=?""",
             (body.get('status_id'), body.get('currency_id'),
              body.get('price_per_standard_post'), body.get('price_per_top_post'),
              body.get('monthly_standard_posts',0), body.get('monthly_top_posts',0),
-             body.get('signing_at'), body.get('end_at'), cid))
+             body.get('signing_at'), body.get('end_at'), body.get('pdf_url'), cid))
         self.db.commit()
         row = self.db.execute("SELECT * FROM contracts WHERE id=?", (cid,)).fetchone()
         self.send_json(dict(row))
@@ -1125,6 +1143,12 @@ class Handler(BaseHTTPRequestHandler):
             where.append('lv_plat.code=?'); params.append(qs['platform_code'][0])
         if qs.get('mention_type_code'):
             where.append('lv_mt.code=?'); params.append(qs['mention_type_code'][0])
+        if qs.get('country_code'):
+            where.append('a.country_id = (SELECT id FROM list_values WHERE UPPER(code)=UPPER(?))')
+            params.append(qs['country_code'][0])
+        if qs.get('niche_code'):
+            where.append('p.niche_id = (SELECT id FROM list_values WHERE UPPER(code)=UPPER(?))')
+            params.append(qs['niche_code'][0])
         if where:
             sql += ' WHERE ' + ' AND '.join(where)
         sql += ' GROUP BY po.id ORDER BY po.published_at DESC'
@@ -1450,6 +1474,11 @@ class Handler(BaseHTTPRequestHandler):
 # ─────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     init_db()
+    try:
+        conn.execute("ALTER TABLE contracts ADD COLUMN pdf_url TEXT;")
+        conn.commit()
+    except:
+        pass
     print("\n" + "="*40)
     print("🚀 AMBASSADORS BACKOFFICE")
     print("="*40 + "\n")
