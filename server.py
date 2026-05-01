@@ -474,10 +474,6 @@ def get_db():
     return conn
 
 def init_db():
-    for f in [DB_PATH+"-journal", DB_PATH+"-wal", DB_PATH+"-shm"]:
-        if os.path.exists(f): 
-            try: os.remove(f); print(f"[DB] Removed old lock file: {f}")
-            except: pass
     conn = get_db()
     # Ejecutamos SCHEMA y SEEDS siempre para asegurar tablas y catálogos básicos
     conn.executescript(SCHEMA)
@@ -528,8 +524,8 @@ def rows_to_list(rows):
 # ─────────────────────────────────────────────────────────────
 # RATE LIMITING — Protección contra fuerza bruta en login
 # ─────────────────────────────────────────────────────────────
-MAX_LOGIN_ATTEMPTS = 5          # Intentos antes de bloquear
-LOCKOUT_SECONDS    = 15 * 60   # 15 minutos de bloqueo
+MAX_LOGIN_ATTEMPTS = 10         # Intentos antes de bloquear
+LOCKOUT_SECONDS    = 60        # 1 minuto de bloqueo
 
 _login_attempts = {}   # { ip: {'count': int, 'locked_until': float} }
 _login_lock     = Lock()
