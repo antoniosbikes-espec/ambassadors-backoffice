@@ -1507,13 +1507,43 @@ function renderRpuTable(rows) {
       <td><span class="badge badge-country">${r.country_code || '—'}</span></td>
       <td><span class="badge badge-lang">${r.niche_code || '—'}</span></td>
       <td><strong style="color:var(--accent-purple)">€${Number(r.rpu || 0).toFixed(4)}</strong></td>
-      <td><button class="btn-icon" style="width:auto;padding:4px 10px;font-size:11px" onclick="deleteRpu(${r.id})">Eliminar</button></td>
+      <td>
+        <button class="btn-icon" onclick="editRpu(${r.id})" title="Editar RPU">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="btn-icon" onclick="deleteRpu(${r.id})" style="color:var(--danger)" title="Eliminar RPU">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+        </button>
+      </td>
     </tr>
   `).join('');
 }
 
 window.deleteRevenue = async (id) => { await DELETE(`/revenues/${id}`); renderRevenue(); };
-window.deleteRpu = async (id) => { await DELETE(`/rpus/${id}`); renderRevenue(); };
+window.deleteRpu = async (id) => { if(confirm('¿Seguro?')) { await DELETE(`/rpus/${id}`); renderRevenue(); } };
+
+window.editRpu = async (id) => {
+  const r = (await GET('/rpus')).find(x => x.id === id);
+  if (!r) return;
+  
+  openModal('Editar RPU', `
+    <div class="form-group"><label class="form-label">Fecha</label><input type="date" id="erpu-date" value="${r.views_date}" /></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">País</label><select id="erpu-country" class="filter-select" style="width:100%">${listOptions('country', '', r.country_id)}</select></div>
+      <div class="form-group"><label class="form-label">Nicho</label><select id="erpu-niche" class="filter-select" style="width:100%">${listOptions('niche', '', r.niche_id)}</select></div>
+    </div>
+    <div class="form-group"><label class="form-label">RPU (€/view)</label><input type="number" id="erpu-val" value="${r.rpu}" step="0.0001" /></div>
+  `, async () => {
+    const views_date = document.getElementById('erpu-date').value;
+    const country_id = parseInt(document.getElementById('erpu-country').value);
+    const niche_id = parseInt(document.getElementById('erpu-niche').value);
+    const rpu = parseFloat(document.getElementById('erpu-val').value) || 0;
+    
+    await PUT(`/rpus/${id}`, { views_date, country_id, niche_id, rpu });
+    renderRevenue();
+    return true;
+  });
+};
 
 document.querySelectorAll('.main-tabs .tab[data-maintab]').forEach(tab => {
   tab.addEventListener('click', () => {

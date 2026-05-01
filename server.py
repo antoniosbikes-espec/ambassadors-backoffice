@@ -809,7 +809,9 @@ class Handler(BaseHTTPRequestHandler):
             if path == '/api/rpus' and method == 'POST':
                 return self.create_rpu()
             pid = path_id('/api/rpus')
-            if pid and method == 'DELETE': return self.delete_rpu(pid)
+            if pid:
+                if method == 'PUT':    return self.update_rpu(pid)
+                if method == 'DELETE': return self.delete_rpu(pid)
 
             # ── /api/dashboard ──────────────────────────────
             if path == '/api/dashboard' and method == 'GET':
@@ -1357,6 +1359,15 @@ class Handler(BaseHTTPRequestHandler):
         self.db.execute("DELETE FROM rpus WHERE id=?", (rid,))
         self.db.commit()
         self.send_json({'deleted': rid})
+
+    def update_rpu(self, rid):
+        body = self.read_body()
+        self.db.execute("""
+            UPDATE rpus SET views_date=?, country_id=?, niche_id=?, rpu=?
+            WHERE id=?
+        """, (body.get('views_date'), body.get('country_id'), body.get('niche_id'), body.get('rpu',0), rid))
+        self.db.commit()
+        self.send_json({'updated': rid})
 
     # ── DASHBOARD (agregado) ─────────────────────────────────
     def get_dashboard(self, qs=None):
