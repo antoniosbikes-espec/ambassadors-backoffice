@@ -241,10 +241,9 @@ INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'Expirado','expi
 INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'Cancelado','cancelled'  FROM lists WHERE name='contract_status';
 
 -- Mention types
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'Dedicado','dedicated'    FROM lists WHERE name='mention_type';
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'Integrado','integrated'  FROM lists WHERE name='mention_type';
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'Orgánico','organic'      FROM lists WHERE name='mention_type';
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'Patrocinado','sponsored' FROM lists WHERE name='mention_type';
+INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'M (Mention)','m_mention' FROM lists WHERE name='mention_type';
+INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'OM (Organic Mention)','om_mention' FROM lists WHERE name='mention_type';
+INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'TikTok','tiktok' FROM lists WHERE name='mention_type';
 
 -- Currencies
 INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'Euro','EUR'              FROM lists WHERE name='currency';
@@ -496,6 +495,21 @@ def init_db():
         print("[DB] Cargando datos demo (embajadores)...")
         conn.executescript(DEMO_DATA)
         
+    # MIGRACIÓN MENCIONES: Limpiar menciones antiguas si existen
+    try:
+        conn.execute("""
+            UPDATE list_values SET is_active=0 
+            WHERE list_id=(SELECT id FROM lists WHERE name='mention_type') 
+            AND code NOT IN ('m_mention', 'om_mention', 'tiktok')
+        """)
+        # Asegurar que las nuevas tengan el texto correcto
+        conn.execute("UPDATE list_values SET value='M (Mention)' WHERE code='m_mention'")
+        conn.execute("UPDATE list_values SET value='OM (Organic Mention)' WHERE code='om_mention'")
+        conn.execute("UPDATE list_values SET value='TikTok' WHERE code='tiktok'")
+        print("[DB] Tipos de mención actualizados")
+    except:
+        pass
+
     conn.commit()
     conn.close()
     print(f"[DB] Initialised at {DB_PATH}")

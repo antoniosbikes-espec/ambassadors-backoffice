@@ -58,6 +58,8 @@ async function init() {
       const activePage = document.querySelector('.page.active').id;
       if (activePage === 'page-dashboard') renderDashboard();
       if (activePage === 'page-analytics') renderAnalytics();
+      if (activePage === 'page-ambassadors') renderAmbassadors();
+      if (activePage === 'page-posts') renderPosts();
     });
   });
 
@@ -513,14 +515,16 @@ async function renderAmbassadors() {
 function buildAmbassadorFilters() {
   const qs = {};
   const search = document.getElementById('ambassador-search')?.value.trim();
-  const country = document.getElementById('amb-filter-country')?.value;
-  const platform = document.getElementById('amb-filter-platform')?.value;
+  const country = document.getElementById('amb-filter-country')?.value || document.getElementById('filter-country')?.value;
+  const platform = document.getElementById('amb-filter-platform')?.value || document.getElementById('filter-platform')?.value;
   const status = document.getElementById('amb-filter-status')?.value;
+  const niche = document.getElementById('filter-niche')?.value;
 
   if (search) qs.search = search;
   if (country) qs.country_code = country;
   if (platform) qs.platform_code = platform;
   if (status) qs.status_code = status;
+  if (niche) qs.niche_code = niche;
 
   return Object.keys(qs).length ? qs : null;
 }
@@ -674,23 +678,56 @@ async function renderDetailProfiles() {
             <div class="profile-url">${p.url}</div>
             <div class="profile-stats">${fmt(p.total_views || 0, 'compact')} views · ${p.niche || '—'}</div>
           </div>
-          <button class="btn-icon" onclick="deleteProfile(${p.id})" title="Eliminar perfil">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-          </button>
+          <div class="header-actions">
+            <button class="btn-icon" onclick="editProfile(${p.id})" title="Editar canal">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+            <button class="btn-icon" onclick="deleteProfile(${p.id})" title="Eliminar canal" style="color:var(--danger)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+            </button>
+          </div>
         </div>
       `).join('')
-    : '<p style="color:var(--text-tertiary);font-size:13px;text-align:center;padding:20px">Sin perfiles añadidos</p>';
+    : '<p style="color:var(--text-tertiary);font-size:13px;text-align:center;padding:20px">Sin canales añadidos</p>';
 }
 
 window.deleteProfile = async (pid) => {
-  if (!confirm('¿Eliminar este perfil?')) return;
+  if (!confirm('¿Eliminar este canal?')) return;
   try {
     await DELETE(`/profiles/${pid}`);
     await renderDetailProfiles();
     await renderAmbassadors();
   } catch (e) {
-    alert('Error al eliminar perfil: ' + e.message);
+    alert('Error al eliminar canal: ' + e.message);
   }
+};
+
+window.editProfile = async (pid) => {
+  const p = await GET(`/profiles/${pid}`).catch(() => null);
+  if (!p) return;
+  openModal('Editar canal', `
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Plataforma *</label><select id="ep-platform" class="filter-select" style="width:100%;padding-right:28px">${listOptions('platform', '— Plataforma —', p.platform_id)}</select></div>
+      <div class="form-group"><label class="form-label">Handle</label><input type="text" id="ep-handle" value="${p.handle || ''}" /></div>
+    </div>
+    <div class="form-group"><label class="form-label">URL *</label><input type="text" id="ep-url" value="${p.url || ''}" /></div>
+    <div class="form-group"><label class="form-label">Nicho</label><select id="ep-niche" class="filter-select" style="width:100%;padding-right:28px">${listOptions('niche', '— Nicho —', p.niche_id)}</select></div>
+  `, async () => {
+    const platform_id = document.getElementById('ep-platform').value;
+    const handle = document.getElementById('ep-handle').value.trim();
+    const url = document.getElementById('ep-url').value.trim();
+    const niche_id = document.getElementById('ep-niche').value || null;
+    if (!url || !platform_id) { alert('Plataforma y URL son obligatorios'); return false; }
+    try {
+      await PUT(`/profiles/${pid}`, { platform_id, handle, url, niche_id });
+      await renderDetailProfiles();
+      await renderAmbassadors();
+      return true;
+    } catch (e) {
+      alert('Error al actualizar: ' + e.message);
+      return false;
+    }
+  });
 };
 
 async function renderDetailContracts() {
@@ -708,9 +745,15 @@ async function renderDetailContracts() {
           </div>
           <span class="contract-value">${fmt(monthly * 12, 'currency')}/año</span>
           ${statusBadge(c.status_code, c.status)}
-          <button class="btn-icon" onclick="deleteContract(${c.id})" title="Eliminar">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-          </button>
+          <div class="header-actions" style="margin-left: 10px;">
+            ${c.pdf_url ? `<a href="${c.pdf_url}" download="contrato.pdf" class="btn-icon" title="Descargar PDF"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></a>` : ''}
+            <button class="btn-icon" onclick="editContract(${c.id})" title="Editar">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+            <button class="btn-icon" onclick="deleteContract(${c.id})" title="Eliminar" style="color:var(--danger)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+            </button>
+          </div>
         </div>`;
     }).join('')
     : '<p style="color:var(--text-tertiary);font-size:13px;text-align:center;padding:20px">Sin contratos</p>';
@@ -726,6 +769,81 @@ window.deleteContract = async (cid) => {
   }
 };
 
+window.editContract = async (cid) => {
+  const c = await GET(`/contracts/${cid}`).catch(() => null);
+  if (!c) return;
+
+  const updateDatesVisibility = () => {
+    const sel = document.getElementById('ec-status');
+    const txt = sel.options[sel.selectedIndex]?.text?.toLowerCase() || '';
+    const dateRow = document.getElementById('ec-dates-row');
+    if (txt.includes('firmado') || txt.includes('signed') || txt.includes('activo')) {
+      dateRow.style.display = 'flex';
+    } else {
+      dateRow.style.display = 'none';
+      document.getElementById('ec-sign').value = '';
+      document.getElementById('ec-end').value = '';
+    }
+  };
+  window.updateDatesVisibility = updateDatesVisibility;
+
+  openModal('Editar contrato', `
+    <div class="form-group"><label class="form-label" style="color:var(--text-secondary)">Canal: ${c.handle || c.platform}</label></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Estado</label><select id="ec-status" class="filter-select" style="width:100%" onchange="updateDatesVisibility()">${listOptions('contract_status', '', c.status_id)}</select></div>
+      <div class="form-group"><label class="form-label">Moneda</label><select id="ec-currency" class="filter-select" style="width:100%">${listOptions('currency', '', c.currency_id)}</select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">€ / post estándar</label><input type="number" id="ec-pstd" value="${c.price_per_standard_post || ''}" min="0" step="0.01" /></div>
+      <div class="form-group"><label class="form-label">Posts estándar/mes</label><input type="number" id="ec-mstd" value="${c.monthly_standard_posts || ''}" min="0" /></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">€ / post top</label><input type="number" id="ec-ptop" value="${c.price_per_top_post || ''}" min="0" step="0.01" /></div>
+      <div class="form-group"><label class="form-label">Posts top/mes</label><input type="number" id="ec-mtop" value="${c.monthly_top_posts || ''}" min="0" /></div>
+    </div>
+    <div class="form-row" id="ec-dates-row" style="display:none">
+      <div class="form-group"><label class="form-label">Firma</label><input type="date" id="ec-sign" value="${c.signing_at ? c.signing_at.slice(0, 10) : ''}" /></div>
+      <div class="form-group"><label class="form-label">Fin</label><input type="date" id="ec-end" value="${c.end_at ? c.end_at.slice(0, 10) : ''}" /></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Subir Contrato (.pdf)</label>
+      <input type="file" id="ec-pdf" accept=".pdf" class="filter-select" style="width:100%; padding: 4px;" />
+      ${c.pdf_url ? '<div style="margin-top:4px;font-size:11px"><a href="' + c.pdf_url + '" download="contrato.pdf" style="color:var(--accent-purple)">Ver PDF actual</a></div>' : ''}
+    </div>
+  `, async () => {
+    const status_id = parseInt(document.getElementById('ec-status').value);
+    const currency_id = parseInt(document.getElementById('ec-currency').value) || null;
+    const price_per_standard_post = parseFloat(document.getElementById('ec-pstd').value) || 0;
+    const monthly_standard_posts = parseInt(document.getElementById('ec-mstd').value) || 0;
+    const price_per_top_post = parseFloat(document.getElementById('ec-ptop').value) || 0;
+    const monthly_top_posts = parseInt(document.getElementById('ec-mtop').value) || 0;
+    const signing_at = document.getElementById('ec-sign').value || null;
+    const end_at = document.getElementById('ec-end').value || null;
+    if (!status_id) { alert('Estado es obligatorio'); return false; }
+    
+    let pdf_url = c.pdf_url;
+    const pdfFile = document.getElementById('ec-pdf').files[0];
+    if (pdfFile) {
+       const reader = new FileReader();
+       pdf_url = await new Promise(res => { reader.onload = () => res(reader.result); reader.readAsDataURL(pdfFile); });
+    }
+
+    try {
+      await PUT(`/contracts/${cid}`, {
+        status_id, currency_id,
+        price_per_standard_post, monthly_standard_posts,
+        price_per_top_post, monthly_top_posts, signing_at, end_at, pdf_url
+      });
+      await renderDetailContracts();
+      return true;
+    } catch (e) {
+      alert('Error al guardar: ' + e.message);
+      return false;
+    }
+  });
+  updateDatesVisibility();
+};
+
 async function renderDetailContent() {
   const posts = await GET('/posts', { ambassador_id: selectedAmbassadorId }).catch(() => []);
   const container = document.getElementById('content-list');
@@ -738,9 +856,14 @@ async function renderDetailContent() {
             <div class="profile-url">${p.published_at ? p.published_at.slice(0, 10) : '—'}</div>
             <div class="profile-stats">${fmt(p.total_views || 0, 'compact')} views · Score: ${Number(p.content_score || 0).toFixed(2)}</div>
           </div>
-          <button class="btn-icon" onclick="deletePost(${p.id})" title="Eliminar">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
-          </button>
+          <div class="header-actions" style="margin-left: auto;">
+            <button class="btn-icon" onclick="editPost(${p.id})" title="Editar">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+            <button class="btn-icon" onclick="deletePost(${p.id})" title="Eliminar" style="color:var(--danger)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+            </button>
+          </div>
         </div>
       `).join('')
     : '<p style="color:var(--text-tertiary);font-size:13px;text-align:center;padding:20px">Sin posts registrados</p>';
@@ -760,6 +883,47 @@ window.deletePost = async (pid) => {
   } catch (e) {
     alert('Error al eliminar post: ' + e.message);
   }
+};
+
+window.editPost = async (pid) => {
+  const p = await GET(`/posts/${pid}`).catch(() => null);
+  if (!p) return;
+
+  const profiles = await GET('/profiles', { ambassador_id: selectedAmbassadorId });
+
+  openModal('Editar post', `
+    <div class="form-group"><label class="form-label">Canal *</label>
+      <select id="ep-profile" class="filter-select" style="width:100%;padding-right:28px">
+        ${profiles.map(pr => `<option value="${pr.id}" ${pr.id === p.profile_id ? 'selected' : ''}>${pr.handle || pr.url} (${pr.platform})</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">URL del post *</label><input type="text" id="ep-url" value="${p.url || ''}" /></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Tipo mención</label><select id="ep-mention" class="filter-select" style="width:100%;padding-right:28px">${listOptions('mention_type', p.mention_type_id)}</select></div>
+      <div class="form-group"><label class="form-label">Fecha publicación</label><input type="date" id="ep-date" value="${p.published_at ? p.published_at.slice(0, 10) : ''}" /></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Content Score (0-10)</label><input type="number" id="ep-score" value="${p.content_score || 0}" min="0" max="10" step="0.1" /></div>
+      <div class="form-group"><label class="form-label">Offset mención (seg.)</label><input type="number" id="ep-offset" value="${p.mention_offset || 0}" min="0" /></div>
+    </div>
+  `, async () => {
+    const profile_id = parseInt(document.getElementById('ep-profile').value);
+    const url = document.getElementById('ep-url').value.trim();
+    const mention_type_id = parseInt(document.getElementById('ep-mention').value) || null;
+    const published_at = document.getElementById('ep-date').value || null;
+    const content_score = parseFloat(document.getElementById('ep-score').value) || null;
+    const mention_offset = parseInt(document.getElementById('ep-offset').value) || 0;
+    
+    if (!url) { alert('URL es obligatoria'); return false; }
+    try {
+      await PUT(`/posts/${pid}`, { profile_id, url, mention_type_id, published_at, content_score, mention_offset });
+      await renderDetailContent();
+      return true;
+    } catch (e) {
+      alert('Error al actualizar: ' + e.message);
+      return false;
+    }
+  });
 };
 
 // ── Delegación en tab-content ──────────────────────────────
@@ -844,7 +1008,7 @@ document.getElementById('btn-edit-ambassador').addEventListener('click', async (
 
 document.getElementById('btn-delete-ambassador').addEventListener('click', async () => {
   if (!selectedAmbassadorId) return;
-  if (!confirm('¿Seguro que quieres eliminar este embajador? Se borrarán todos sus perfiles y contratos.')) return;
+  if (!confirm('¿Seguro que quieres eliminar este embajador? Se borrarán todos sus canales y contratos.')) return;
   try {
     await DELETE(`/ambassadors/${selectedAmbassadorId}`);
     selectedAmbassadorId = null;
@@ -858,7 +1022,7 @@ document.getElementById('btn-delete-ambassador').addEventListener('click', async
 
 document.getElementById('btn-add-profile').addEventListener('click', () => {
   if (!selectedAmbassadorId) return;
-  openModal('Añadir perfil', `
+  openModal('Añadir canal', `
     <div class="form-row">
       <div class="form-group"><label class="form-label">Plataforma *</label><select id="ap-platform" class="filter-select" style="width:100%;padding-right:28px">${listOptions('platform', '— Plataforma —')}</select></div>
       <div class="form-group"><label class="form-label">Handle</label><input type="text" id="ap-handle" placeholder="@usuario" /></div>
@@ -886,47 +1050,86 @@ document.getElementById('btn-add-profile').addEventListener('click', () => {
 document.getElementById('btn-add-contract').addEventListener('click', async () => {
   if (!selectedAmbassadorId) return;
   const profiles = await GET('/profiles', { ambassador_id: selectedAmbassadorId }).catch(() => []);
-  const profileOptions = profiles.map(p => `<option value="${p.id}">${p.handle || p.url} (${p.platform})</option>`).join('');
+  if (profiles.length === 0) { alert('Añade un canal primero'); return; }
+
+  const profilesHtml = profiles.map(p => `
+    <div class="contract-profile-block" style="border:1px solid rgba(255,255,255,0.1); padding:10px; border-radius:8px; margin-bottom:12px;">
+      <h4 style="margin-top:0;margin-bottom:10px;font-size:13px;color:var(--text-primary)">
+        <input type="checkbox" class="ac-profile-check" value="${p.id}" checked />
+        Incluir ${p.handle || p.url} (${p.platform})
+      </h4>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">€ / post estándar</label><input type="number" class="ac-pstd" data-pid="${p.id}" placeholder="0.00" min="0" step="0.01" /></div>
+        <div class="form-group"><label class="form-label">Posts estándar/mes</label><input type="number" class="ac-mstd" data-pid="${p.id}" placeholder="0" min="0" /></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">€ / post top</label><input type="number" class="ac-ptop" data-pid="${p.id}" placeholder="0.00" min="0" step="0.01" /></div>
+        <div class="form-group"><label class="form-label">Posts top/mes</label><input type="number" class="ac-mtop" data-pid="${p.id}" placeholder="0" min="0" /></div>
+      </div>
+    </div>
+  `).join('');
+
+  const updateDatesVisibility = () => {
+    const sel = document.getElementById('ac-status');
+    const txt = sel.options[sel.selectedIndex]?.text?.toLowerCase() || '';
+    const dateRow = document.getElementById('ac-dates-row');
+    if (txt.includes('firmado') || txt.includes('signed') || txt.includes('activo')) {
+      dateRow.style.display = 'flex';
+    } else {
+      dateRow.style.display = 'none';
+      document.getElementById('ac-sign').value = '';
+      document.getElementById('ac-end').value = '';
+    }
+  };
+  window.updateDatesVisibility = updateDatesVisibility;
 
   openModal('Nuevo contrato', `
-    <div class="form-group"><label class="form-label">Perfil *</label>
-      <select id="ac-profile" class="filter-select" style="width:100%;padding-right:28px">
-        ${profileOptions || '<option value="">— Sin perfiles —</option>'}
-      </select>
-    </div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Estado</label><select id="ac-status" class="filter-select" style="width:100%;padding-right:28px">${listOptions('contract_status')}</select></div>
-      <div class="form-group"><label class="form-label">Moneda</label><select id="ac-currency" class="filter-select" style="width:100%;padding-right:28px">${listOptions('currency')}</select></div>
+      <div class="form-group"><label class="form-label">Estado común</label><select id="ac-status" class="filter-select" style="width:100%" onchange="updateDatesVisibility()">${listOptions('contract_status')}</select></div>
+      <div class="form-group"><label class="form-label">Moneda</label><select id="ac-currency" class="filter-select" style="width:100%">${listOptions('currency')}</select></div>
     </div>
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">€ / post estándar</label><input type="number" id="ac-pstd" placeholder="0.00" min="0" step="0.01" /></div>
-      <div class="form-group"><label class="form-label">Posts estándar/mes</label><input type="number" id="ac-mstd" placeholder="0" min="0" /></div>
-    </div>
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">€ / post top</label><input type="number" id="ac-ptop" placeholder="0.00" min="0" step="0.01" /></div>
-      <div class="form-group"><label class="form-label">Posts top/mes</label><input type="number" id="ac-mtop" placeholder="0" min="0" /></div>
-    </div>
-    <div class="form-row">
+    <div class="form-row" id="ac-dates-row" style="display:none">
       <div class="form-group"><label class="form-label">Firma</label><input type="date" id="ac-sign" value="${new Date().toISOString().slice(0, 10)}" /></div>
       <div class="form-group"><label class="form-label">Fin</label><input type="date" id="ac-end" /></div>
     </div>
+    <div class="form-group">
+      <label class="form-label">Subir Contrato (.pdf)</label>
+      <input type="file" id="ac-pdf" accept=".pdf" class="filter-select" style="width:100%; padding: 4px;" />
+    </div>
+    <hr style="border:0;border-top:1px solid rgba(255,255,255,0.1);margin:15px 0" />
+    <h3 style="font-size:14px;margin-bottom:10px;">Canales incluidos</h3>
+    ${profilesHtml}
   `, async () => {
-    const profile_id = parseInt(document.getElementById('ac-profile').value);
     const status_id = parseInt(document.getElementById('ac-status').value);
     const currency_id = parseInt(document.getElementById('ac-currency').value) || null;
-    const price_per_standard_post = parseFloat(document.getElementById('ac-pstd').value) || 0;
-    const monthly_standard_posts = parseInt(document.getElementById('ac-mstd').value) || 0;
-    const price_per_top_post = parseFloat(document.getElementById('ac-ptop').value) || 0;
-    const monthly_top_posts = parseInt(document.getElementById('ac-mtop').value) || 0;
     const signing_at = document.getElementById('ac-sign').value || null;
     const end_at = document.getElementById('ac-end').value || null;
-    if (!profile_id || !status_id) { alert('Perfil y estado son obligatorios'); return false; }
+    if (!status_id) { alert('Estado es obligatorio'); return false; }
+    
+    const pdfFile = document.getElementById('ac-pdf').files[0];
+    let pdf_url = null;
+    if (pdfFile) {
+       const reader = new FileReader();
+       pdf_url = await new Promise(res => { reader.onload = () => res(reader.result); reader.readAsDataURL(pdfFile); });
+    }
+
+    const checks = Array.from(document.querySelectorAll('.ac-profile-check:checked'));
+    if (checks.length === 0) { alert('Selecciona al menos un canal'); return false; }
+
     try {
-      await POST('/contracts', {
-        profile_id, status_id, currency_id,
-        price_per_standard_post, monthly_standard_posts,
-        price_per_top_post, monthly_top_posts, signing_at, end_at
-      });
+      for (const chk of checks) {
+        const pid = chk.value;
+        const price_per_standard_post = parseFloat(document.querySelector(`.ac-pstd[data-pid="${pid}"]`).value) || 0;
+        const monthly_standard_posts = parseInt(document.querySelector(`.ac-mstd[data-pid="${pid}"]`).value) || 0;
+        const price_per_top_post = parseFloat(document.querySelector(`.ac-ptop[data-pid="${pid}"]`).value) || 0;
+        const monthly_top_posts = parseInt(document.querySelector(`.ac-mtop[data-pid="${pid}"]`).value) || 0;
+        
+        await POST('/contracts', {
+          profile_id: pid, status_id, currency_id,
+          price_per_standard_post, monthly_standard_posts,
+          price_per_top_post, monthly_top_posts, signing_at, end_at, pdf_url
+        });
+      }
       await renderDetailContracts();
       return true;
     } catch (e) {
@@ -934,15 +1137,23 @@ document.getElementById('btn-add-contract').addEventListener('click', async () =
       return false;
     }
   });
+  updateDatesVisibility();
 });
 
 function openNewPostModal() {
   if (!selectedAmbassadorId) return;
   GET('/profiles', { ambassador_id: selectedAmbassadorId }).then(profiles => {
-    const profileOptions = profiles.map(p => `<option value="${p.id}">${p.handle || p.url} (${p.platform})</option>`).join('');
+    const profileOptions = profiles.map(p => `<option value="${p.id}" data-views="${p.expected_views || 0}">${p.handle || p.url} (${p.platform})</option>`).join('');
+    
+    window.updateExpectedViews = function(selId, inpId) {
+      const sel = document.getElementById(selId);
+      const opt = sel.options[sel.selectedIndex];
+      if (opt && opt.dataset.views) document.getElementById(inpId).value = opt.dataset.views;
+    };
+
     openModal('Registrar post', `
-      <div class="form-group"><label class="form-label">Perfil *</label>
-        <select id="nc-profile" class="filter-select" style="width:100%;padding-right:28px">${profileOptions || '<option value="">— Sin perfiles —</option>'}</select>
+      <div class="form-group"><label class="form-label">Canal *</label>
+        <select id="nc-profile" class="filter-select" style="width:100%;padding-right:28px" onchange="updateExpectedViews('nc-profile', 'nc-views')">${profileOptions || '<option value="">— Sin canales —</option>'}</select>
       </div>
       <div class="form-group"><label class="form-label">URL del post *</label><input type="text" id="nc-url" placeholder="https://..." /></div>
       <div class="form-row">
@@ -951,7 +1162,7 @@ function openNewPostModal() {
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Views iniciales</label><input type="number" id="nc-views" placeholder="0" min="0" /></div>
-        <div class="form-group"><label class="form-label">Content Score (0-1)</label><input type="number" id="nc-score" placeholder="0.80" min="0" max="1" step="0.01" /></div>
+        <div class="form-group"><label class="form-label">Content Score (0-10)</label><input type="number" id="nc-score" placeholder="8.5" min="0" max="10" step="0.1" /></div>
       </div>
       <div class="form-group"><label class="form-label">Offset mención (seg.)</label><input type="number" id="nc-offset" placeholder="0" min="0" /></div>
     `, async () => {
@@ -975,6 +1186,7 @@ function openNewPostModal() {
         return false;
       }
     });
+    setTimeout(() => window.updateExpectedViews('nc-profile', 'nc-views'), 100);
   });
 }
 
@@ -984,10 +1196,15 @@ function openNewPostModal() {
 async function renderPosts() {
   const qs = {};
   const search = document.getElementById('posts-search')?.value.trim();
-  const platform = document.getElementById('posts-filter-platform')?.value;
+  const platform = document.getElementById('posts-filter-platform')?.value || document.getElementById('filter-platform')?.value;
   const mention = document.getElementById('posts-filter-mention')?.value;
+  const country = document.getElementById('filter-country')?.value;
+  const niche = document.getElementById('filter-niche')?.value;
+  
   if (platform) qs.platform_code = platform;
   if (mention) qs.mention_type_code = mention;
+  if (country) qs.country_code = country;
+  if (niche) qs.niche_code = niche;
 
   const posts = await GET('/posts', Object.keys(qs).length ? qs : null).catch(() => []);
   const filtered = search
@@ -1015,10 +1232,16 @@ document.getElementById('posts-filter-mention').addEventListener('change', rende
 
 document.getElementById('btn-new-post').addEventListener('click', () => {
   GET('/profiles').then(profiles => {
+    window.updateExpectedViews = function(selId, inpId) {
+      const sel = document.getElementById(selId);
+      const opt = sel.options[sel.selectedIndex];
+      if (opt && opt.dataset.views) document.getElementById(inpId).value = opt.dataset.views;
+    };
+
     openModal('Registrar post', `
-      <div class="form-group"><label class="form-label">Perfil *</label>
-        <select id="np-profile" class="filter-select" style="width:100%;padding-right:28px">
-          ${profiles.map(p => `<option value="${p.id}">${p.ambassador_name} — ${p.handle || p.url} (${p.platform})</option>`).join('')}
+      <div class="form-group"><label class="form-label">Canal *</label>
+        <select id="np-profile" class="filter-select" style="width:100%;padding-right:28px" onchange="updateExpectedViews('np-profile', 'np-views')">
+          ${profiles.map(p => `<option value="${p.id}" data-views="${p.expected_views || 0}">${p.ambassador_name} — ${p.handle || p.url} (${p.platform})</option>`).join('')}
         </select>
       </div>
       <div class="form-group"><label class="form-label">URL del post *</label><input type="text" id="np-url" placeholder="https://..." /></div>
@@ -1027,8 +1250,8 @@ document.getElementById('btn-new-post').addEventListener('click', () => {
         <div class="form-group"><label class="form-label">Fecha publicación</label><input type="date" id="np-date" value="${new Date().toISOString().slice(0, 10)}" /></div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Views</label><input type="number" id="np-views" placeholder="0" min="0" /></div>
-        <div class="form-group"><label class="form-label">Content Score (0-1)</label><input type="number" id="np-score" placeholder="0.80" min="0" max="1" step="0.01" /></div>
+        <div class="form-group"><label class="form-label">Views iniciales</label><input type="number" id="np-views" placeholder="0" min="0" /></div>
+        <div class="form-group"><label class="form-label">Content Score (0-10)</label><input type="number" id="np-score" placeholder="8.5" min="0" max="10" step="0.1" /></div>
       </div>
     `, async () => {
       const profile_id = parseInt(document.getElementById('np-profile').value);
@@ -1037,7 +1260,7 @@ document.getElementById('btn-new-post').addEventListener('click', () => {
       const published_at = document.getElementById('np-date').value || null;
       const views = parseInt(document.getElementById('np-views').value) || 0;
       const content_score = parseFloat(document.getElementById('np-score').value) || null;
-      if (!url || !profile_id) { alert('Perfil y URL son obligatorios'); return false; }
+      if (!url || !profile_id) { alert('Canal y URL son obligatorios'); return false; }
       try {
         const post = await POST('/posts', { profile_id, url, mention_type_id, published_at, content_score, mention_offset: 0 });
         if (views > 0) {
@@ -1050,6 +1273,7 @@ document.getElementById('btn-new-post').addEventListener('click', () => {
         return false;
       }
     });
+    setTimeout(() => window.updateExpectedViews('np-profile', 'np-views'), 100);
   });
 });
 
@@ -1089,7 +1313,7 @@ function buildAnalyticsGroups(ambassadors, profiles, posts, contracts, groupBy) 
   console.log('Building analytics groups by:', groupBy);
 
   if (['niche', 'platform', 'profile'].includes(groupBy)) {
-    // Agrupar por perfiles individuales para mayor precisión en nichos/plataformas
+    // Agrupar por canales individuales para mayor precisión en nichos/plataformas
     profiles.forEach(p => {
       const amb = ambassadors.find(a => a.id == p.ambassador_id);
       if (!amb) return;
