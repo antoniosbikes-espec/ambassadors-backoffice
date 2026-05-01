@@ -483,12 +483,20 @@ def init_db():
     conn.executescript(SCHEMA)
     conn.executescript(SEEDS)
     
-    # MIGRACIÓN: (Eliminada phone, Añadida notes si no existe)
     try:
         conn.execute("ALTER TABLE ambassadors ADD COLUMN notes TEXT")
         print("[DB] Columna 'notes' añadida a ambassadors")
     except:
         pass # Ya existe
+    
+    # MIGRACIÓN SCORES: Escalar 0-1 a 0-10
+    try:
+        # Solo escalamos si detectamos que hay valores pequeños pero > 0
+        updated = conn.execute("UPDATE posts SET content_score = content_score * 10 WHERE content_score > 0 AND content_score <= 1").rowcount
+        if updated > 0:
+            print(f"[DB] Migrados {updated} content_scores de escala 0-1 a 0-10")
+    except Exception as e:
+        print(f"[DB] Error en migración de scores: {e}")
     # Solo cargar datos demo de personas si la tabla está totalmente vacía
     count = conn.execute("SELECT COUNT(*) FROM ambassadors").fetchone()[0]
     if count == 0:
