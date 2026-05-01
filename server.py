@@ -175,6 +175,7 @@ CREATE TABLE IF NOT EXISTS revenues (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     views_date  TEXT    NOT NULL,
     country_id  INTEGER NOT NULL REFERENCES list_values(id),
+    niche_id    INTEGER REFERENCES list_values(id),
     currency_id INTEGER REFERENCES list_values(id),
     amount      REAL    NOT NULL DEFAULT 0,
     created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
@@ -476,6 +477,11 @@ def init_db():
     conn.executescript(SCHEMA)
     conn.executescript(SEEDS)
     
+    try:
+        conn.execute("ALTER TABLE revenues ADD COLUMN niche_id INTEGER REFERENCES list_values(id)")
+        print("[DB] Columna 'niche_id' añadida a revenues")
+    except: pass
+
     try:
         conn.execute("ALTER TABLE ambassadors ADD COLUMN notes TEXT")
         print("[DB] Columna 'notes' añadida a ambassadors")
@@ -1310,9 +1316,11 @@ class Handler(BaseHTTPRequestHandler):
     def get_revenues(self, qs={}):
         rows = self.db.execute("""
             SELECT r.*, lv_c.value AS country, lv_c.code AS country_code,
+              lv_n.value AS niche, lv_n.code AS niche_code,
               lv_cur.value AS currency, lv_cur.code AS currency_code
             FROM revenues r
             LEFT JOIN list_values lv_c   ON lv_c.id   = r.country_id
+            LEFT JOIN list_values lv_n   ON lv_n.id   = r.niche_id
             LEFT JOIN list_values lv_cur ON lv_cur.id = r.currency_id
             ORDER BY r.views_date DESC
         """).fetchall()
@@ -1321,12 +1329,11 @@ class Handler(BaseHTTPRequestHandler):
     def create_revenue(self):
         body = self.read_body()
         cur = self.db.execute(
-            "INSERT INTO revenues(views_date,country_id,currency_id,amount) VALUES(?,?,?,?)",
-            (body.get('views_date'), body.get('country_id'), body.get('currency_id'), body.get('amount',0))
+            "INSERT INTO revenues(views_date,country_id,niche_id,currency_id,amount) VALUES(?,?,?,?,?)",
+            (body.get('views_date'), body.get('country_id'), body.get('niche_id'), body.get('currency_id'), body.get('amount',0))
         )
         self.db.commit()
-        row = self.db.execute("SELECT * FROM revenues WHERE id=?", (cur.lastrowid,)).fetchone()
-        self.send_json(dict(row), 201)
+        self.send_json({'id': cur.lastrowid}, 201)
 
     def delete_revenue(self, rid):
         self.db.execute("DELETE FROM revenues WHERE id=?", (rid,))

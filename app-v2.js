@@ -1625,14 +1625,16 @@ document.getElementById('btn-add-revenue').addEventListener('click', () => {
       <div class="form-group"><label class="form-label">País</label><select id="rv-country" class="filter-select" style="width:100%;padding-right:28px">${listOptions('country')}</select></div>
     </div>
     <div class="form-row">
+      <div class="form-group"><label class="form-label">Nicho</label><select id="rv-niche" class="filter-select" style="width:100%;padding-right:28px"><option value="">— Sin nicho —</option>${listOptions('niche')}</select></div>
       <div class="form-group"><label class="form-label">Moneda</label><select id="rv-currency" class="filter-select" style="width:100%;padding-right:28px">${listOptions('currency')}</select></div>
-      <div class="form-group"><label class="form-label">Importe</label><input type="number" id="rv-amount" placeholder="0.00" min="0" step="0.01" /></div>
     </div>
+    <div class="form-group"><label class="form-label">Importe</label><input type="number" id="rv-amount" placeholder="0.00" min="0" step="0.01" /></div>
   `, async () => {
     try {
       await POST('/revenues', {
         views_date: document.getElementById('rv-date').value,
         country_id: parseInt(document.getElementById('rv-country').value),
+        niche_id: parseInt(document.getElementById('rv-niche').value) || null,
         currency_id: parseInt(document.getElementById('rv-currency').value) || null,
         amount: parseFloat(document.getElementById('rv-amount').value) || 0,
       });
