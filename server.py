@@ -1488,11 +1488,43 @@ class Handler(BaseHTTPRequestHandler):
 # ─────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     init_db()
+    
+    # MIGRACIONES FORZADAS (Para asegurar cambios en Railway)
+    conn = get_db()
     try:
+        # 1. Asegurar columna pdf_url
         conn.execute("ALTER TABLE contracts ADD COLUMN pdf_url TEXT;")
+        print("[DB] Columna pdf_url añadida.")
+    except: pass
+
+    try:
+        # 2. Forzar actualización de Tipos de Mención
+        # Desactivar todos los que no sean los nuevos
+        conn.execute("""
+            UPDATE list_values SET is_active=0 
+            WHERE list_id=(SELECT id FROM lists WHERE name='mention_type') 
+            AND code NOT IN ('m_mention', 'om_mention', 'tiktok')
+        """)
+        
+        # Asegurar que los 3 principales existen y están activos con el nombre correcto
+        for label, code in [('M (Mention)', 'm_mention'), ('OM (Organic Mention)', 'om_mention'), ('TikTok', 'tiktok')]:
+            # Intentar insertar si no existe
+            conn.execute("""
+                INSERT OR IGNORE INTO list_values (list_id, value, code, is_active)
+                SELECT id, ?, ?, 1 FROM lists WHERE name='mention_type'
+            """, (label, code))
+            # Forzar el nombre y estado activo por si ya existía con otro nombre/estado
+            conn.execute("""
+                UPDATE list_values SET value=?, is_active=1 
+                WHERE code=? AND list_id=(SELECT id FROM lists WHERE name='mention_type')
+            """, (label, code))
+        
         conn.commit()
-    except:
-        pass
+        print("[DB] Tipos de mención verificados y actualizados.")
+    except Exception as e:
+        print(f"[DB] Error en migración de menciones: {e}")
+    finally:
+        conn.close()
     print("\n" + "="*40)
     print("🚀 AMBASSADORS BACKOFFICE")
     print("="*40 + "\n")
@@ -1503,5 +1535,5 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\nStopping...")
         server.server_close()
-# Force redeploy 2
+# Force redeploy - Update mention types 3
 
