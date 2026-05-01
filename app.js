@@ -170,7 +170,7 @@ const DELETE = (ep) => api('DELETE', ep);
 // ─────────────────────────────────────────────────────────────
 async function loadLists() {
   try {
-    const data = await GET('/lists');
+    const data = await GET('/lists?t=' + Date.now());
     console.log("📥 Listas recibidas del servidor:", data);
     if (!Array.isArray(data)) {
       console.error("❌ Error: El servidor no ha devuelto un array de listas.");
@@ -200,9 +200,11 @@ function listByCode(name, code) {
 
 function listOptions(name, placeholder = '', selectedValue = null) {
   const items = LISTS[name] || [];
+  if (name === 'mention_type') console.log(`🛠 [listOptions:${name}] Renderizando ${items.length} items. Seleccionado: ${selectedValue}`);
   const ph = placeholder ? `<option value="">${placeholder}</option>` : '';
   return ph + items.map(lv => {
     const selected = String(lv.id) === String(selectedValue) ? 'selected' : '';
+    if (name === 'mention_type' && selected) console.log(`   ✅ Encontrado seleccionado: ${lv.value} (ID:${lv.id})`);
     return `<option value="${lv.id}" ${selected}>${lv.value}</option>`;
   }).join('');
 }
