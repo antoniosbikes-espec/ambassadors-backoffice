@@ -1545,15 +1545,67 @@ class Handler(BaseHTTPRequestHandler):
                 # Other post types -> 0 según especificación
                 expected_revenue += 0
 
-        # Revenue Real (basado en tabla revenues y fechas)
-        rev_where_parts = ["r.views_date >= date('now', ?)"]
-        rev_params = [f'-{days} days']
-        if qs and qs.get('country_code') and qs['country_code'][0]:
-            rev_where_parts.append('r.country_id = (SELECT id FROM list_values WHERE UPPER(code)=UPPER(?))')
-            rev_params.append(qs['country_code'][0])
-        
-        rev_where = " WHERE " + " AND ".join(rev_where_parts)
-        real_revenue = self.db.execute(f"SELECT SUM(amount) FROM revenues r {rev_where}", rev_params).fetchone()[0] or 0
+        # Revenue Real (Automático basado en visualizaciones reales y fórmula oficial)
+        real_conds = ["pvh.views_date >= date('now', ?)"]
+        w_sql_real, _ = build_where(real_conds)
+        # Obtenemos las views reales por post y los datos de su perfil para aplicar la fórmula
+        rows_real = self.db.execute(f"""
+            SELECT 
+                po.id AS post_id,
+                SUM(pvh.new_views) AS real_views,
+                pa.cache_score, pa.content_target_score, pa.country_target_score,
+                lv_plat.code AS platform_code,
+                lv_country.code AS country_code,
+                lv_mt.code AS mention_type_code
+            {base_from}
+            JOIN posts po ON po.profile_id = p.id
+            JOIN post_views_history pvh ON pvh.post_id = po.id
+            LEFT JOIN list_values lv_plat ON lv_plat.id = p.platform_id
+            LEFT JOIN list_values lv_country ON lv_country.id = a.country_id
+            LEFT JOIN list_values lv_mt ON lv_mt.id = po.mention_type_id
+            LEFT JOIN profile_analyses pa ON pa.id = 
+                (SELECT id FROM profile_analyses WHERE profile_id=p.id ORDER BY created_at DESC LIMIT 1)
+            {w_sql_real}
+            GROUP BY po.id
+        """, params + [f'-{days} days']).fetchall()
+
+        real_revenue = 0
+        for r in rows_real:
+            rv = r['real_views'] or 0
+            if rv <= 0: continue
+            
+            c_code = (r['country_code'] or '').upper()
+            country_mult = COUNTRY_RPM_MULT.get(c_code)
+            if country_mult is None:
+                if c_code in LATAM_CODES: country_mult = 0.40
+                else: country_mult = 0.12
+            
+            c_val = r['cache_score']
+            if c_val is None:
+                cache_mult = 1.0
+            elif isinstance(c_val, str):
+                cache_mult = {'LOW': 0.8, 'MID': 1.0, 'HIGH': 1.2}.get(c_val.upper(), 1.0)
+            else:
+                cache_mult = float(c_val) if float(c_val) > 0 else 1.0
+                
+            cts = r['content_target_score'] or 1.0
+            cots = r['country_target_score'] or 0.6
+            cots_adj = min(cots / 0.6, 1.0)
+            
+            base_val_post = (rv / 1000.0) * 42.0 * country_mult * cache_mult * cts * cots_adj
+            
+            p_code = (r['platform_code'] or '').lower()
+            mt_code = (r['mention_type_code'] or '').lower()
+            
+            if p_code == 'youtube':
+                if mt_code == 'om_mention':
+                    real_revenue += base_val_post * 4.0
+                else:
+                    real_revenue += base_val_post * 2.5
+            elif p_code == 'tiktok':
+                real_revenue += base_val_post * 1.0
+            else:
+                real_revenue += 0
         
         # Views totales
         w_sql_v, _ = build_where()
