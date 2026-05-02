@@ -122,7 +122,7 @@ CREATE TABLE IF NOT EXISTS profile_analyses (
     expected_views        INTEGER NOT NULL DEFAULT 0,
     total_30d_posts       INTEGER NOT NULL DEFAULT 0,
     cache_score           REAL CHECK(cache_score BETWEEN 0 AND 1),
-    content_target_score  REAL CHECK(content_target_score BETWEEN 0 AND 1),
+    content_target_score  REAL CHECK(content_target_score BETWEEN 0 AND 10),
     country_target_score  REAL CHECK(country_target_score BETWEEN 0 AND 1),
     created_at            TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -154,7 +154,7 @@ CREATE TABLE IF NOT EXISTS posts (
     url              TEXT    NOT NULL UNIQUE,
     mention_type_id  INTEGER REFERENCES list_values(id),
     mention_offset   INTEGER NOT NULL DEFAULT 0,
-    content_score    REAL    CHECK(content_score BETWEEN 0 AND 1),
+    content_score    REAL    CHECK(content_score BETWEEN 0 AND 10),
     published_at     TEXT,
     created_at       TEXT    NOT NULL DEFAULT (datetime('now'))
 );
@@ -490,12 +490,64 @@ def init_db():
     
     # MIGRACIÓN SCORES: Escalar 0-1 a 0-10
     try:
-        # Solo escalamos si detectamos que hay valores pequeños pero > 0
-        updated = conn.execute("UPDATE posts SET content_score = content_score * 10 WHERE content_score > 0 AND content_score <= 1").rowcount
-        if updated > 0:
-            print(f"[DB] Migrados {updated} content_scores de escala 0-1 a 0-10")
+        # Revisar y migrar posts
+        table_sql = conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='posts'").fetchone()
+        if table_sql and 'BETWEEN 0 AND 1)' in table_sql[0]:
+            print("[DB] Migrando schema de posts para soportar content_score 0-10...")
+            conn.execute("PRAGMA foreign_keys = OFF")
+            conn.execute("ALTER TABLE posts RENAME TO posts_old")
+            conn.execute("""
+                CREATE TABLE posts (
+                    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                    profile_id       INTEGER NOT NULL REFERENCES profiles(id),
+                    url              TEXT    NOT NULL UNIQUE,
+                    mention_type_id  INTEGER REFERENCES list_values(id),
+                    mention_offset   INTEGER NOT NULL DEFAULT 0,
+                    content_score    REAL    CHECK(content_score BETWEEN 0 AND 10),
+                    published_at     TEXT,
+                    created_at       TEXT    NOT NULL DEFAULT (datetime('now'))
+                )
+            """)
+            conn.execute("INSERT INTO posts SELECT * FROM posts_old")
+            conn.execute("DROP TABLE posts_old")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_post_profile ON posts(profile_id)")
+            
+            updated = conn.execute("UPDATE posts SET content_score = content_score * 10 WHERE content_score > 0 AND content_score <= 1").rowcount
+            if updated > 0:
+                print(f"[DB] Migrados {updated} content_scores de escala 0-1 a 0-10")
+            conn.execute("PRAGMA foreign_keys = ON")
+
+        # Revisar y migrar profile_analyses
+        table_sql_pa = conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='profile_analyses'").fetchone()
+        if table_sql_pa and 'content_target_score BETWEEN 0 AND 1)' in table_sql_pa[0]:
+            print("[DB] Migrando schema de profile_analyses para soportar content_target_score 0-10...")
+            conn.execute("PRAGMA foreign_keys = OFF")
+            conn.execute("ALTER TABLE profile_analyses RENAME TO profile_analyses_old")
+            conn.execute("""
+                CREATE TABLE profile_analyses (
+                    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+                    profile_id            INTEGER NOT NULL REFERENCES profiles(id),
+                    expected_views        INTEGER NOT NULL DEFAULT 0,
+                    total_30d_posts       INTEGER NOT NULL DEFAULT 0,
+                    cache_score           REAL CHECK(cache_score BETWEEN 0 AND 1),
+                    content_target_score  REAL CHECK(content_target_score BETWEEN 0 AND 10),
+                    country_target_score  REAL CHECK(country_target_score BETWEEN 0 AND 1),
+                    created_at            TEXT NOT NULL DEFAULT (datetime('now'))
+                )
+            """)
+            conn.execute("INSERT INTO profile_analyses SELECT * FROM profile_analyses_old")
+            conn.execute("DROP TABLE profile_analyses_old")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_pa_profile ON profile_analyses(profile_id)")
+            
+            updated_pa = conn.execute("UPDATE profile_analyses SET content_target_score = content_target_score * 10 WHERE content_target_score > 0 AND content_target_score <= 1").rowcount
+            if updated_pa > 0:
+                print(f"[DB] Migrados {updated_pa} content_target_scores de escala 0-1 a 0-10")
+            conn.execute("PRAGMA foreign_keys = ON")
+
     except Exception as e:
+        conn.execute("PRAGMA foreign_keys = ON")
         print(f"[DB] Error en migración de scores: {e}")
+        
     # Solo cargar datos demo de personas si la tabla está totalmente vacía
     count = conn.execute("SELECT COUNT(*) FROM ambassadors").fetchone()[0]
     if count == 0:
