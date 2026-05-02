@@ -751,7 +751,7 @@ async function renderDetailContracts() {
           <span class="contract-value">${fmt(monthly * 12, 'currency')}/año</span>
           ${statusBadge(c.status_code, c.status)}
           <div class="header-actions" style="margin-left: 10px;">
-            ${c.pdf_url ? `<a href="${c.pdf_url}" download="contrato.pdf" class="btn-icon" title="Descargar PDF"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></a>` : ''}
+            ${c.pdf_url ? `<a href="${c.pdf_url}" download="contrato_${c.handle ? c.handle.replace(/[@ ]/g, '') : 'embajador'}.pdf" class="btn-icon" title="Descargar PDF"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></a>` : ''}
             <button class="btn-icon" onclick="editContract(${c.id})" title="Editar">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             </button>
@@ -813,7 +813,7 @@ window.editContract = async (cid) => {
     <div class="form-group">
       <label class="form-label">Subir Contrato (.pdf)</label>
       <input type="file" id="ec-pdf" accept=".pdf" class="filter-select" style="width:100%; padding: 4px;" />
-      ${c.pdf_url ? '<div style="margin-top:4px;font-size:11px"><a href="' + c.pdf_url + '" download="contrato.pdf" style="color:var(--accent-purple)">Ver PDF actual</a></div>' : ''}
+      ${c.pdf_url ? '<div style="margin-top:4px;font-size:11px"><a href="' + c.pdf_url + '" download="contrato_' + (c.handle ? c.handle.replace(/[@ ]/g, '') : 'embajador') + '.pdf" style="color:var(--accent-purple)">Ver PDF actual</a></div>' : ''}
     </div>
   `, async () => {
     const status_id = parseInt(document.getElementById('ec-status').value);
