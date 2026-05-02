@@ -488,13 +488,27 @@ def init_db():
     except:
         pass # Ya existe
     
-    # MIGRACIÓN SCORES: Escalar 0-1 a 0-10
+    # MIGRACIÓN SCORES: Escalar 0-1 a 0-10 de forma robusta
     try:
-        # Revisar y migrar posts
+        conn.execute("PRAGMA foreign_keys = OFF")
+        
+        # 1. Recuperación de fallos previos (si existen las tablas _old)
+        for tbl in ['posts', 'profile_analyses']:
+            old_tbl = tbl + "_old"
+            exists_main = conn.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{tbl}'").fetchone()
+            exists_old = conn.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{old_tbl}'").fetchone()
+            
+            if exists_old and not exists_main:
+                print(f"[DB] Recuperando {tbl} desde {old_tbl}...")
+                conn.execute(f"ALTER TABLE {old_tbl} RENAME TO {tbl}")
+            elif exists_old and exists_main:
+                print(f"[DB] Limpiando tabla temporal {old_tbl}...")
+                conn.execute(f"DROP TABLE {old_tbl}")
+
+        # 2. Ejecutar migración de Posts
         table_sql = conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='posts'").fetchone()
         if table_sql and 'BETWEEN 0 AND 1)' in table_sql[0]:
             print("[DB] Migrando schema de posts para soportar content_score 0-10...")
-            conn.execute("PRAGMA foreign_keys = OFF")
             conn.execute("ALTER TABLE posts RENAME TO posts_old")
             conn.execute("""
                 CREATE TABLE posts (
@@ -515,13 +529,11 @@ def init_db():
             updated = conn.execute("UPDATE posts SET content_score = content_score * 10 WHERE content_score > 0 AND content_score <= 1").rowcount
             if updated > 0:
                 print(f"[DB] Migrados {updated} content_scores de escala 0-1 a 0-10")
-            conn.execute("PRAGMA foreign_keys = ON")
 
-        # Revisar y migrar profile_analyses
+        # 3. Ejecutar migración de Profile Analyses
         table_sql_pa = conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='profile_analyses'").fetchone()
         if table_sql_pa and 'content_target_score BETWEEN 0 AND 1)' in table_sql_pa[0]:
             print("[DB] Migrando schema de profile_analyses para soportar content_target_score 0-10...")
-            conn.execute("PRAGMA foreign_keys = OFF")
             conn.execute("ALTER TABLE profile_analyses RENAME TO profile_analyses_old")
             conn.execute("""
                 CREATE TABLE profile_analyses (
@@ -542,7 +554,6 @@ def init_db():
             updated_pa = conn.execute("UPDATE profile_analyses SET content_target_score = content_target_score * 10 WHERE content_target_score > 0 AND content_target_score <= 1").rowcount
             if updated_pa > 0:
                 print(f"[DB] Migrados {updated_pa} content_target_scores de escala 0-1 a 0-10")
-            conn.execute("PRAGMA foreign_keys = ON")
 
     except Exception as e:
         conn.execute("PRAGMA foreign_keys = ON")
@@ -710,7 +721,9 @@ class Handler(BaseHTTPRequestHandler):
                 last_v = self.db.execute("SELECT SUM(new_views) FROM post_views_history WHERE post_id=?", (p['id'],)).fetchone()[0] or 0
                 if real_v > last_v:
                     diff = real_v - last_v
-                    self.db.execute("INSERT INTO post_views_history (post_id, new_views, views_date) VALUES (?, ?, date('now'))", (p['id'], diff))
+                    # Usamos INSERT OR IGNORE y luego UPDATE para ser compatibles con versiones antiguas de SQLite sin ON CONFLICT
+                    self.db.execute("INSERT OR IGNORE INTO post_views_history (post_id, new_views, views_date) VALUES (?, 0, date('now'))", (p['id'],))
+                    self.db.execute("UPDATE post_views_history SET new_views = new_views + ? WHERE post_id=? AND views_date=date('now')", (diff, p['id']))
                     updated += 1
         
         self.db.commit()
@@ -1446,6 +1459,9 @@ class Handler(BaseHTTPRequestHandler):
             if qs.get('platform_code') and qs['platform_code'][0]:
                 where_parts.append('p.platform_id = (SELECT id FROM list_values WHERE UPPER(code)=UPPER(?))')
                 params.append(qs['platform_code'][0])
+            if qs.get('ambassador_id'):
+                where_parts.append('a.id = ?')
+                params.append(qs['ambassador_id'][0])
             if qs.get('days'):
                 days = qs['days'][0]
 
