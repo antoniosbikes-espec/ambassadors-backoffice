@@ -1515,9 +1515,14 @@ class Handler(BaseHTTPRequestHandler):
                 if c_code in LATAM_CODES: country_mult = 0.40
                 else: country_mult = 0.12 # Developing / Default
             
-            # 2. Cache Multiplier — ENUM: LOW=0.8, MID=1.0, HIGH=1.2
-            cache_val = (r['cache_score'] or 'MID').upper()
-            cache_mult = {'LOW': 0.8, 'MID': 1.0, 'HIGH': 1.2}.get(cache_val, 1.0)
+            # 2. Cache Multiplier — ENUM: LOW=0.8, MID=1.0, HIGH=1.2 o número
+            c_val = r['cache_score']
+            if c_val is None:
+                cache_mult = 1.0
+            elif isinstance(c_val, str):
+                cache_mult = {'LOW': 0.8, 'MID': 1.0, 'HIGH': 1.2}.get(c_val.upper(), 1.0)
+            else:
+                cache_mult = float(c_val) if float(c_val) > 0 else 1.0
             
             # 3. Target Scores (Content & Country)
             cts = r['content_target_score'] or 1.0
