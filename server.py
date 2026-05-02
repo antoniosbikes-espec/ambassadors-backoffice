@@ -479,11 +479,13 @@ def init_db():
     
     try:
         conn.execute("ALTER TABLE revenues ADD COLUMN niche_id INTEGER REFERENCES list_values(id)")
+        conn.commit()
         print("[DB] Columna 'niche_id' añadida a revenues")
     except: pass
 
     try:
         conn.execute("ALTER TABLE ambassadors ADD COLUMN notes TEXT")
+        conn.commit()
         print("[DB] Columna 'notes' añadida a ambassadors")
     except:
         pass # Ya existe
@@ -501,9 +503,11 @@ def init_db():
             if exists_old and not exists_main:
                 print(f"[DB] Recuperando {tbl} desde {old_tbl}...")
                 conn.execute(f"ALTER TABLE {old_tbl} RENAME TO {tbl}")
+                conn.commit()
             elif exists_old and exists_main:
                 print(f"[DB] Limpiando tabla temporal {old_tbl}...")
                 conn.execute(f"DROP TABLE {old_tbl}")
+                conn.commit()
 
         # 2. Ejecutar migración de Posts
         table_sql = conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='posts'").fetchone()
@@ -525,10 +529,9 @@ def init_db():
             conn.execute("INSERT INTO posts SELECT * FROM posts_old")
             conn.execute("DROP TABLE posts_old")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_post_profile ON posts(profile_id)")
-            
-            updated = conn.execute("UPDATE posts SET content_score = content_score * 10 WHERE content_score > 0 AND content_score <= 1").rowcount
-            if updated > 0:
-                print(f"[DB] Migrados {updated} content_scores de escala 0-1 a 0-10")
+            conn.execute("UPDATE posts SET content_score = content_score * 10 WHERE content_score > 0 AND content_score <= 1")
+            conn.commit()
+            print("[DB] Migración de posts completada")
 
         # 3. Ejecutar migración de Profile Analyses
         table_sql_pa = conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='profile_analyses'").fetchone()
@@ -550,10 +553,9 @@ def init_db():
             conn.execute("INSERT INTO profile_analyses SELECT * FROM profile_analyses_old")
             conn.execute("DROP TABLE profile_analyses_old")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_pa_profile ON profile_analyses(profile_id)")
-            
-            updated_pa = conn.execute("UPDATE profile_analyses SET content_target_score = content_target_score * 10 WHERE content_target_score > 0 AND content_target_score <= 1").rowcount
-            if updated_pa > 0:
-                print(f"[DB] Migrados {updated_pa} content_target_scores de escala 0-1 a 0-10")
+            conn.execute("UPDATE profile_analyses SET content_target_score = content_target_score * 10 WHERE content_target_score > 0 AND content_target_score <= 1")
+            conn.commit()
+            print("[DB] Migración de profile_analyses completada")
 
     except Exception as e:
         conn.execute("PRAGMA foreign_keys = ON")
