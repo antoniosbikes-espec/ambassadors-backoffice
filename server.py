@@ -26,7 +26,7 @@ else:
     else:
         DB_DIR = os.path.join(os.path.dirname(base), 'db')
 
-DB_PATH = os.path.join(DB_DIR, 'ambassadors.db')
+DB_PATH = os.path.join(DB_DIR, 'ambassadors_v3.db')
 
 if not os.path.exists(DB_DIR):
     os.makedirs(DB_DIR, exist_ok=True)
