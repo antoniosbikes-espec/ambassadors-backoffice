@@ -72,17 +72,14 @@ PRAGMA foreign_keys = ON;
 -- ── Catálogos ──────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS lists (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    name       TEXT    NOT NULL UNIQUE,   -- e.g. 'platform', 'country', 'language'...
-    created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+    name       TEXT    NOT NULL UNIQUE   -- e.g. 'platform', 'country', 'language'...
 );
 
 CREATE TABLE IF NOT EXISTS list_values (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     list_id    INTEGER NOT NULL REFERENCES lists(id),
     value      TEXT    NOT NULL,
-    code       TEXT,                      -- e.g. 'ES', 'youtube'
     is_active  INTEGER NOT NULL DEFAULT 1,
-    created_at TEXT    NOT NULL DEFAULT (datetime('now')),
     UNIQUE(list_id, value)
 );
 
@@ -94,7 +91,6 @@ CREATE TABLE IF NOT EXISTS ambassadors (
     last_name            TEXT,
     primary_language_id  INTEGER REFERENCES list_values(id),
     country_id           INTEGER REFERENCES list_values(id),
-    notes                TEXT,
     created_at           TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_amb_email    ON ambassadors(email);
@@ -141,7 +137,8 @@ CREATE TABLE IF NOT EXISTS contracts (
     last_analysis_id         INTEGER REFERENCES profile_analyses(id),
     signing_at               TEXT,
     end_at                   TEXT,
-    pdf_url                  TEXT,
+    contract_file_url        TEXT,
+    notes                    TEXT,
     created_at               TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_con_profile ON contracts(profile_id);
@@ -154,31 +151,28 @@ CREATE TABLE IF NOT EXISTS posts (
     url              TEXT    NOT NULL UNIQUE,
     mention_type_id  INTEGER REFERENCES list_values(id),
     mention_offset   INTEGER NOT NULL DEFAULT 0,
-    content_score    REAL    CHECK(content_score BETWEEN 0 AND 10),
-    published_at     TEXT,
-    created_at       TEXT    NOT NULL DEFAULT (datetime('now'))
+    content_score    REAL    CHECK(content_score BETWEEN 0 AND 1),
+    published_at     TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_post_profile ON posts(profile_id);
 
--- ── Historial de visualizaciones ───────────────────────────
-CREATE TABLE IF NOT EXISTS post_views_history (
+-- ── Historial de visualizaciones (daily_views) ─────────────
+CREATE TABLE IF NOT EXISTS daily_views (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     post_id     INTEGER NOT NULL REFERENCES posts(id),
     views_date  TEXT    NOT NULL,
     new_views   INTEGER NOT NULL DEFAULT 0,
     UNIQUE(post_id, views_date)
 );
-CREATE INDEX IF NOT EXISTS idx_pvh_post ON post_views_history(post_id, views_date);
+CREATE INDEX IF NOT EXISTS idx_dv_post ON daily_views(post_id, views_date);
 
 -- ── Revenue real ───────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS revenues (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    views_date  TEXT    NOT NULL,
-    country_id  INTEGER NOT NULL REFERENCES list_values(id),
-    niche_id    INTEGER REFERENCES list_values(id),
-    currency_id INTEGER REFERENCES list_values(id),
-    amount      REAL    NOT NULL DEFAULT 0,
-    created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    views_date    TEXT    NOT NULL,
+    country_id    INTEGER NOT NULL REFERENCES list_values(id),
+    currency_id   INTEGER REFERENCES list_values(id),
+    new_revenue   REAL    NOT NULL DEFAULT 0
 );
 
 -- ── RPUs (Revenue per unit / view) ─────────────────────────
@@ -188,7 +182,6 @@ CREATE TABLE IF NOT EXISTS rpus (
     country_id  INTEGER NOT NULL REFERENCES list_values(id),
     niche_id    INTEGER NOT NULL REFERENCES list_values(id),
     rpu         REAL    NOT NULL DEFAULT 0,
-    created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
     UNIQUE(views_date, country_id, niche_id)
 );
 """
@@ -200,180 +193,180 @@ INSERT OR IGNORE INTO lists(name) VALUES
   ('contract_status'),('mention_type'),('currency');
 
 -- Platforms
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'YouTube','youtube'   FROM lists WHERE name='platform';
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'Instagram','instagram' FROM lists WHERE name='platform';
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'TikTok','tiktok'     FROM lists WHERE name='platform';
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'LinkedIn','linkedin'  FROM lists WHERE name='platform';
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'Twitch','twitch'     FROM lists WHERE name='platform';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'YouTube'   FROM lists WHERE name='platform';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'Instagram' FROM lists WHERE name='platform';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'TikTok'    FROM lists WHERE name='platform';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'LinkedIn'  FROM lists WHERE name='platform';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'Twitch'    FROM lists WHERE name='platform';
 
 -- Countries
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'España','ES'          FROM lists WHERE name='country';
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'México','MX'          FROM lists WHERE name='country';
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'Argentina','AR'       FROM lists WHERE name='country';
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'Estados Unidos','US'  FROM lists WHERE name='country';
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'Reino Unido','UK'     FROM lists WHERE name='country';
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'Francia','FR'         FROM lists WHERE name='country';
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'Alemania','DE'        FROM lists WHERE name='country';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'España'          FROM lists WHERE name='country';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'México'          FROM lists WHERE name='country';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'Argentina'       FROM lists WHERE name='country';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'Estados Unidos'  FROM lists WHERE name='country';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'Reino Unido'     FROM lists WHERE name='country';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'Francia'         FROM lists WHERE name='country';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'Alemania'        FROM lists WHERE name='country';
 
 -- Languages
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'Español','ES'   FROM lists WHERE name='language';
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'Inglés','EN'    FROM lists WHERE name='language';
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'Portugués','PT' FROM lists WHERE name='language';
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'Francés','FR'   FROM lists WHERE name='language';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'Español'   FROM lists WHERE name='language';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'Inglés'    FROM lists WHERE name='language';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'Portugués' FROM lists WHERE name='language';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'Francés'   FROM lists WHERE name='language';
 
 -- Niches
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'Fashion','fashion'   FROM lists WHERE name='niche';
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'Beauty','beauty'     FROM lists WHERE name='niche';
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'Fitness','fitness'   FROM lists WHERE name='niche';
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'Tech','tech'         FROM lists WHERE name='niche';
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'Food','food'         FROM lists WHERE name='niche';
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'Travel','travel'     FROM lists WHERE name='niche';
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'Gaming','gaming'     FROM lists WHERE name='niche';
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'Lifestyle','lifestyle' FROM lists WHERE name='niche';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'Fashion'   FROM lists WHERE name='niche';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'Beauty'     FROM lists WHERE name='niche';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'Fitness'   FROM lists WHERE name='niche';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'Tech'         FROM lists WHERE name='niche';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'Food'         FROM lists WHERE name='niche';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'Travel'     FROM lists WHERE name='niche';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'Gaming'     FROM lists WHERE name='niche';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'Lifestyle' FROM lists WHERE name='niche';
 
 -- Contract statuses
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'Borrador','draft'       FROM lists WHERE name='contract_status';
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'Ofertado','offered'     FROM lists WHERE name='contract_status';
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'Firmado','signed'       FROM lists WHERE name='contract_status';
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'Expirado','expired'     FROM lists WHERE name='contract_status';
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'Cancelado','cancelled'  FROM lists WHERE name='contract_status';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'Borrador'       FROM lists WHERE name='contract_status';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'Ofertado'     FROM lists WHERE name='contract_status';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'Firmado'       FROM lists WHERE name='contract_status';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'Expirado'     FROM lists WHERE name='contract_status';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'Cancelado'  FROM lists WHERE name='contract_status';
 
 -- Mention types
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'M (Mention)','m_mention' FROM lists WHERE name='mention_type';
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'OM (Organic Mention)','om_mention' FROM lists WHERE name='mention_type';
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'TikTok','tiktok' FROM lists WHERE name='mention_type';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'M (Mention)' FROM lists WHERE name='mention_type';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'OM (Organic Mention)' FROM lists WHERE name='mention_type';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'TikTok' FROM lists WHERE name='mention_type';
 
 -- Currencies
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'Euro','EUR'              FROM lists WHERE name='currency';
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'Dólar USD','USD'         FROM lists WHERE name='currency';
-INSERT OR IGNORE INTO list_values(list_id,value,code) SELECT id,'Libra esterlina','GBP'   FROM lists WHERE name='currency';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'Euro'              FROM lists WHERE name='currency';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'Dólar USD'         FROM lists WHERE name='currency';
+INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'Libra esterlina'   FROM lists WHERE name='currency';
 """
 
 DEMO_DATA = """
 -- Demo ambassadors (only if table is empty)
 INSERT OR IGNORE INTO ambassadors(email,first_name,last_name,primary_language_id,country_id,created_at) VALUES(
   'carlos@ejemplo.com','Carlos','Martínez',
-  (SELECT id FROM list_values WHERE code='ES' AND list_id=(SELECT id FROM lists WHERE name='language')),
-  (SELECT id FROM list_values WHERE code='ES' AND list_id=(SELECT id FROM lists WHERE name='country')),
+  (SELECT id FROM list_values WHERE value='España' AND list_id=(SELECT id FROM lists WHERE name='language')),
+  (SELECT id FROM list_values WHERE value='España' AND list_id=(SELECT id FROM lists WHERE name='country')),
   '2024-01-10 00:00:00'
 );
 INSERT OR IGNORE INTO ambassadors(email,first_name,last_name,primary_language_id,country_id,created_at) VALUES(
   'laura@ejemplo.com','Laura','Gómez',
-  (SELECT id FROM list_values WHERE code='ES' AND list_id=(SELECT id FROM lists WHERE name='language')),
-  (SELECT id FROM list_values WHERE code='ES' AND list_id=(SELECT id FROM lists WHERE name='country')),
+  (SELECT id FROM list_values WHERE value='España' AND list_id=(SELECT id FROM lists WHERE name='language')),
+  (SELECT id FROM list_values WHERE value='España' AND list_id=(SELECT id FROM lists WHERE name='country')),
   '2024-02-14 00:00:00'
 );
 INSERT OR IGNORE INTO ambassadors(email,first_name,last_name,primary_language_id,country_id,created_at) VALUES(
   'miguel@ejemplo.com','Miguel','Torres',
-  (SELECT id FROM list_values WHERE code='ES' AND list_id=(SELECT id FROM lists WHERE name='language')),
-  (SELECT id FROM list_values WHERE code='MX' AND list_id=(SELECT id FROM lists WHERE name='country')),
+  (SELECT id FROM list_values WHERE value='España' AND list_id=(SELECT id FROM lists WHERE name='language')),
+  (SELECT id FROM list_values WHERE value='México' AND list_id=(SELECT id FROM lists WHERE name='country')),
   '2024-01-28 00:00:00'
 );
 INSERT OR IGNORE INTO ambassadors(email,first_name,last_name,primary_language_id,country_id,created_at) VALUES(
   'sofia@ejemplo.com','Sofia','Ruiz',
-  (SELECT id FROM list_values WHERE code='ES' AND list_id=(SELECT id FROM lists WHERE name='language')),
-  (SELECT id FROM list_values WHERE code='AR' AND list_id=(SELECT id FROM lists WHERE name='country')),
+  (SELECT id FROM list_values WHERE value='España' AND list_id=(SELECT id FROM lists WHERE name='language')),
+  (SELECT id FROM list_values WHERE value='Argentina' AND list_id=(SELECT id FROM lists WHERE name='country')),
   '2024-03-01 00:00:00'
 );
 INSERT OR IGNORE INTO ambassadors(email,first_name,last_name,primary_language_id,country_id,created_at) VALUES(
   'james@ejemplo.com','James','Wilson',
-  (SELECT id FROM list_values WHERE code='EN' AND list_id=(SELECT id FROM lists WHERE name='language')),
-  (SELECT id FROM list_values WHERE code='US' AND list_id=(SELECT id FROM lists WHERE name='country')),
+  (SELECT id FROM list_values WHERE value='Inglés' AND list_id=(SELECT id FROM lists WHERE name='language')),
+  (SELECT id FROM list_values WHERE value='Estados Unidos' AND list_id=(SELECT id FROM lists WHERE name='country')),
   '2024-03-15 00:00:00'
 );
 INSERT OR IGNORE INTO ambassadors(email,first_name,last_name,primary_language_id,country_id,created_at) VALUES(
   'emma@ejemplo.com','Emma','Johnson',
-  (SELECT id FROM list_values WHERE code='EN' AND list_id=(SELECT id FROM lists WHERE name='language')),
-  (SELECT id FROM list_values WHERE code='UK' AND list_id=(SELECT id FROM lists WHERE name='country')),
+  (SELECT id FROM list_values WHERE value='Inglés' AND list_id=(SELECT id FROM lists WHERE name='language')),
+  (SELECT id FROM list_values WHERE value='Reino Unido' AND list_id=(SELECT id FROM lists WHERE name='country')),
   '2024-02-20 00:00:00'
 );
 INSERT OR IGNORE INTO ambassadors(email,first_name,last_name,primary_language_id,country_id,created_at) VALUES(
   'pablo@ejemplo.com','Pablo','Díaz',
-  (SELECT id FROM list_values WHERE code='ES' AND list_id=(SELECT id FROM lists WHERE name='language')),
-  (SELECT id FROM list_values WHERE code='ES' AND list_id=(SELECT id FROM lists WHERE name='country')),
+  (SELECT id FROM list_values WHERE value='España' AND list_id=(SELECT id FROM lists WHERE name='language')),
+  (SELECT id FROM list_values WHERE value='España' AND list_id=(SELECT id FROM lists WHERE name='country')),
   '2024-01-05 00:00:00'
 );
 INSERT OR IGNORE INTO ambassadors(email,first_name,last_name,primary_language_id,country_id,created_at) VALUES(
   'ana@ejemplo.com','Ana','López',
-  (SELECT id FROM list_values WHERE code='ES' AND list_id=(SELECT id FROM lists WHERE name='language')),
-  (SELECT id FROM list_values WHERE code='MX' AND list_id=(SELECT id FROM lists WHERE name='country')),
+  (SELECT id FROM list_values WHERE value='España' AND list_id=(SELECT id FROM lists WHERE name='language')),
+  (SELECT id FROM list_values WHERE value='México' AND list_id=(SELECT id FROM lists WHERE name='country')),
   '2023-12-01 00:00:00'
 );
 
 -- Demo profiles
 INSERT OR IGNORE INTO profiles(ambassador_id,platform_id,handle,url,niche_id,created_at) VALUES(
   (SELECT id FROM ambassadors WHERE email='carlos@ejemplo.com'),
-  (SELECT id FROM list_values WHERE code='youtube' AND list_id=(SELECT id FROM lists WHERE name='platform')),
+  (SELECT id FROM list_values WHERE value='YouTube' AND list_id=(SELECT id FROM lists WHERE name='platform')),
   '@carlosfitness','https://youtube.com/@carlosfitness',
-  (SELECT id FROM list_values WHERE code='fitness' AND list_id=(SELECT id FROM lists WHERE name='niche')),
+  (SELECT id FROM list_values WHERE value='Fitness' AND list_id=(SELECT id FROM lists WHERE name='niche')),
   '2024-01-10 00:00:00'
 );
 INSERT OR IGNORE INTO profiles(ambassador_id,platform_id,handle,url,niche_id,created_at) VALUES(
   (SELECT id FROM ambassadors WHERE email='carlos@ejemplo.com'),
-  (SELECT id FROM list_values WHERE code='instagram' AND list_id=(SELECT id FROM lists WHERE name='platform')),
+  (SELECT id FROM list_values WHERE value='Instagram' AND list_id=(SELECT id FROM lists WHERE name='platform')),
   '@carlos.fit','https://instagram.com/carlos.fit',
-  (SELECT id FROM list_values WHERE code='fitness' AND list_id=(SELECT id FROM lists WHERE name='niche')),
+  (SELECT id FROM list_values WHERE value='Fitness' AND list_id=(SELECT id FROM lists WHERE name='niche')),
   '2024-01-10 00:00:00'
 );
 INSERT OR IGNORE INTO profiles(ambassador_id,platform_id,handle,url,niche_id,created_at) VALUES(
   (SELECT id FROM ambassadors WHERE email='laura@ejemplo.com'),
-  (SELECT id FROM list_values WHERE code='youtube' AND list_id=(SELECT id FROM lists WHERE name='platform')),
+  (SELECT id FROM list_values WHERE value='YouTube' AND list_id=(SELECT id FROM lists WHERE name='platform')),
   '@laurabeauty','https://youtube.com/@laurabeauty',
-  (SELECT id FROM list_values WHERE code='beauty' AND list_id=(SELECT id FROM lists WHERE name='niche')),
+  (SELECT id FROM list_values WHERE value='Beauty' AND list_id=(SELECT id FROM lists WHERE name='niche')),
   '2024-02-14 00:00:00'
 );
 INSERT OR IGNORE INTO profiles(ambassador_id,platform_id,handle,url,niche_id,created_at) VALUES(
   (SELECT id FROM ambassadors WHERE email='sofia@ejemplo.com'),
-  (SELECT id FROM list_values WHERE code='instagram' AND list_id=(SELECT id FROM lists WHERE name='platform')),
+  (SELECT id FROM list_values WHERE value='Instagram' AND list_id=(SELECT id FROM lists WHERE name='platform')),
   '@sofia.fashion','https://instagram.com/sofia.fashion',
-  (SELECT id FROM list_values WHERE code='fashion' AND list_id=(SELECT id FROM lists WHERE name='niche')),
+  (SELECT id FROM list_values WHERE value='Fashion' AND list_id=(SELECT id FROM lists WHERE name='niche')),
   '2024-03-01 00:00:00'
 );
 INSERT OR IGNORE INTO profiles(ambassador_id,platform_id,handle,url,niche_id,created_at) VALUES(
   (SELECT id FROM ambassadors WHERE email='james@ejemplo.com'),
-  (SELECT id FROM list_values WHERE code='youtube' AND list_id=(SELECT id FROM lists WHERE name='platform')),
+  (SELECT id FROM list_values WHERE value='YouTube' AND list_id=(SELECT id FROM lists WHERE name='platform')),
   '@jameswilsontravel','https://youtube.com/@jamestravel',
-  (SELECT id FROM list_values WHERE code='travel' AND list_id=(SELECT id FROM lists WHERE name='niche')),
+  (SELECT id FROM list_values WHERE value='Travel' AND list_id=(SELECT id FROM lists WHERE name='niche')),
   '2024-03-15 00:00:00'
 );
 INSERT OR IGNORE INTO profiles(ambassador_id,platform_id,handle,url,niche_id,created_at) VALUES(
   (SELECT id FROM ambassadors WHERE email='emma@ejemplo.com'),
-  (SELECT id FROM list_values WHERE code='youtube' AND list_id=(SELECT id FROM lists WHERE name='platform')),
+  (SELECT id FROM list_values WHERE value='YouTube' AND list_id=(SELECT id FROM lists WHERE name='platform')),
   '@emmafooduk','https://youtube.com/@emmafooduk',
-  (SELECT id FROM list_values WHERE code='food' AND list_id=(SELECT id FROM lists WHERE name='niche')),
+  (SELECT id FROM list_values WHERE value='Food' AND list_id=(SELECT id FROM lists WHERE name='niche')),
   '2024-02-20 00:00:00'
 );
 INSERT OR IGNORE INTO profiles(ambassador_id,platform_id,handle,url,niche_id,created_at) VALUES(
   (SELECT id FROM ambassadors WHERE email='pablo@ejemplo.com'),
-  (SELECT id FROM list_values WHERE code='youtube' AND list_id=(SELECT id FROM lists WHERE name='platform')),
+  (SELECT id FROM list_values WHERE value='YouTube' AND list_id=(SELECT id FROM lists WHERE name='platform')),
   '@pablofit','https://youtube.com/@pablofit',
-  (SELECT id FROM list_values WHERE code='fitness' AND list_id=(SELECT id FROM lists WHERE name='niche')),
+  (SELECT id FROM list_values WHERE value='Fitness' AND list_id=(SELECT id FROM lists WHERE name='niche')),
   '2024-01-05 00:00:00'
 );
 
 -- Demo contracts
 INSERT OR IGNORE INTO contracts(profile_id,status_id,currency_id,price_per_standard_post,price_per_top_post,monthly_standard_posts,monthly_top_posts,signing_at,end_at) VALUES(
   (SELECT id FROM profiles WHERE handle='@carlosfitness'),
-  (SELECT id FROM list_values WHERE code='signed' AND list_id=(SELECT id FROM lists WHERE name='contract_status')),
-  (SELECT id FROM list_values WHERE code='EUR' AND list_id=(SELECT id FROM lists WHERE name='currency')),
+  (SELECT id FROM list_values WHERE value='Firmado' AND list_id=(SELECT id FROM lists WHERE name='contract_status')),
+  (SELECT id FROM list_values WHERE value='Euro' AND list_id=(SELECT id FROM lists WHERE name='currency')),
   1000.00,2000.00,4,1,'2024-01-10 00:00:00','2024-12-31 00:00:00'
 );
 INSERT OR IGNORE INTO contracts(profile_id,status_id,currency_id,price_per_standard_post,price_per_top_post,monthly_standard_posts,monthly_top_posts,signing_at,end_at) VALUES(
   (SELECT id FROM profiles WHERE handle='@laurabeauty'),
-  (SELECT id FROM list_values WHERE code='signed' AND list_id=(SELECT id FROM lists WHERE name='contract_status')),
-  (SELECT id FROM list_values WHERE code='EUR' AND list_id=(SELECT id FROM lists WHERE name='currency')),
+  (SELECT id FROM list_values WHERE value='Firmado' AND list_id=(SELECT id FROM lists WHERE name='contract_status')),
+  (SELECT id FROM list_values WHERE value='Euro' AND list_id=(SELECT id FROM lists WHERE name='currency')),
   2000.00,4000.00,5,1,'2024-02-14 00:00:00','2024-12-31 00:00:00'
 );
 INSERT OR IGNORE INTO contracts(profile_id,status_id,currency_id,price_per_standard_post,monthly_standard_posts,signing_at,end_at) VALUES(
   (SELECT id FROM profiles WHERE handle='@jameswilsontravel'),
-  (SELECT id FROM list_values WHERE code='offered' AND list_id=(SELECT id FROM lists WHERE name='contract_status')),
-  (SELECT id FROM list_values WHERE code='USD' AND list_id=(SELECT id FROM lists WHERE name='currency')),
+  (SELECT id FROM list_values WHERE value='Ofertado' AND list_id=(SELECT id FROM lists WHERE name='contract_status')),
+  (SELECT id FROM list_values WHERE value='Dólar USD' AND list_id=(SELECT id FROM lists WHERE name='currency')),
   3000.00,3,'2024-03-15 00:00:00','2025-03-15 00:00:00'
 );
 INSERT OR IGNORE INTO contracts(profile_id,status_id,currency_id,price_per_standard_post,monthly_standard_posts,signing_at,end_at) VALUES(
   (SELECT id FROM profiles WHERE handle='@emmafooduk'),
-  (SELECT id FROM list_values WHERE code='signed' AND list_id=(SELECT id FROM lists WHERE name='contract_status')),
-  (SELECT id FROM list_values WHERE code='GBP' AND list_id=(SELECT id FROM lists WHERE name='currency')),
+  (SELECT id FROM list_values WHERE value='Firmado' AND list_id=(SELECT id FROM lists WHERE name='contract_status')),
+  (SELECT id FROM list_values WHERE value='Libra esterlina' AND list_id=(SELECT id FROM lists WHERE name='currency')),
   1600.00,3,'2024-02-20 00:00:00','2024-12-31 00:00:00'
 );
 
@@ -403,58 +396,58 @@ INSERT OR IGNORE INTO posts(profile_id,url,mention_type_id,mention_offset,conten
   60,0.75,'2024-03-22 00:00:00'
 );
 
--- Demo post_views_history
-INSERT OR IGNORE INTO post_views_history(post_id,views_date,new_views) VALUES(
+-- Demo daily_views
+INSERT OR IGNORE INTO daily_views(post_id,views_date,new_views) VALUES(
   (SELECT id FROM posts WHERE url='https://youtu.be/abc001'), '2024-03-15', 185000
 );
-INSERT OR IGNORE INTO post_views_history(post_id,views_date,new_views) VALUES(
+INSERT OR IGNORE INTO daily_views(post_id,views_date,new_views) VALUES(
   (SELECT id FROM posts WHERE url='https://youtu.be/abc002'), '2024-03-20', 420000
 );
-INSERT OR IGNORE INTO post_views_history(post_id,views_date,new_views) VALUES(
+INSERT OR IGNORE INTO daily_views(post_id,views_date,new_views) VALUES(
   (SELECT id FROM posts WHERE url='https://youtu.be/abc003'), '2024-03-18', 540000
 );
-INSERT OR IGNORE INTO post_views_history(post_id,views_date,new_views) VALUES(
+INSERT OR IGNORE INTO daily_views(post_id,views_date,new_views) VALUES(
   (SELECT id FROM posts WHERE url='https://youtu.be/abc004'), '2024-03-22', 72000
 );
 
 -- Demo revenues
-INSERT OR IGNORE INTO revenues(views_date,country_id,currency_id,amount) VALUES(
+INSERT OR IGNORE INTO revenues(views_date,country_id,currency_id,new_revenue) VALUES(
   '2024-03-01',
-  (SELECT id FROM list_values WHERE code='ES' AND list_id=(SELECT id FROM lists WHERE name='country')),
-  (SELECT id FROM list_values WHERE code='EUR' AND list_id=(SELECT id FROM lists WHERE name='currency')),
+  (SELECT id FROM list_values WHERE value='España' AND list_id=(SELECT id FROM lists WHERE name='country')),
+  (SELECT id FROM list_values WHERE value='Euro' AND list_id=(SELECT id FROM lists WHERE name='currency')),
   12300.00
 );
-INSERT OR IGNORE INTO revenues(views_date,country_id,currency_id,amount) VALUES(
+INSERT OR IGNORE INTO revenues(views_date,country_id,currency_id,new_revenue) VALUES(
   '2024-03-01',
-  (SELECT id FROM list_values WHERE code='MX' AND list_id=(SELECT id FROM lists WHERE name='country')),
-  (SELECT id FROM list_values WHERE code='USD' AND list_id=(SELECT id FROM lists WHERE name='currency')),
+  (SELECT id FROM list_values WHERE value='México' AND list_id=(SELECT id FROM lists WHERE name='country')),
+  (SELECT id FROM list_values WHERE value='Dólar USD' AND list_id=(SELECT id FROM lists WHERE name='currency')),
   4800.00
 );
-INSERT OR IGNORE INTO revenues(views_date,country_id,currency_id,amount) VALUES(
+INSERT OR IGNORE INTO revenues(views_date,country_id,currency_id,new_revenue) VALUES(
   '2024-03-01',
-  (SELECT id FROM list_values WHERE code='US' AND list_id=(SELECT id FROM lists WHERE name='country')),
-  (SELECT id FROM list_values WHERE code='USD' AND list_id=(SELECT id FROM lists WHERE name='currency')),
+  (SELECT id FROM list_values WHERE value='Estados Unidos' AND list_id=(SELECT id FROM lists WHERE name='country')),
+  (SELECT id FROM list_values WHERE value='Dólar USD' AND list_id=(SELECT id FROM lists WHERE name='currency')),
   18600.00
 );
-INSERT OR IGNORE INTO revenues(views_date,country_id,currency_id,amount) VALUES(
+INSERT OR IGNORE INTO revenues(views_date,country_id,currency_id,new_revenue) VALUES(
   '2024-03-01',
-  (SELECT id FROM list_values WHERE code='UK' AND list_id=(SELECT id FROM lists WHERE name='country')),
-  (SELECT id FROM list_values WHERE code='GBP' AND list_id=(SELECT id FROM lists WHERE name='currency')),
+  (SELECT id FROM list_values WHERE value='Reino Unido' AND list_id=(SELECT id FROM lists WHERE name='country')),
+  (SELECT id FROM list_values WHERE value='Libra esterlina' AND list_id=(SELECT id FROM lists WHERE name='currency')),
   6840.00
 );
 
 -- Demo RPUs
 INSERT OR IGNORE INTO rpus(views_date,country_id,niche_id,rpu)
 SELECT '2024-03-01',
-  (SELECT id FROM list_values WHERE code='ES' AND list_id=(SELECT id FROM lists WHERE name='country')),
-  (SELECT id FROM list_values WHERE code='fitness' AND list_id=(SELECT id FROM lists WHERE name='niche')),
+  (SELECT id FROM list_values WHERE value='España' AND list_id=(SELECT id FROM lists WHERE name='country')),
+  (SELECT id FROM list_values WHERE value='Fitness' AND list_id=(SELECT id FROM lists WHERE name='niche')),
   0.0220
 WHERE NOT EXISTS(SELECT 1 FROM rpus LIMIT 1);
 
 INSERT OR IGNORE INTO rpus(views_date,country_id,niche_id,rpu)
 SELECT '2024-03-01',
-  (SELECT id FROM list_values WHERE code='US' AND list_id=(SELECT id FROM lists WHERE name='country')),
-  (SELECT id FROM list_values WHERE code='travel' AND list_id=(SELECT id FROM lists WHERE name='niche')),
+  (SELECT id FROM list_values WHERE value='Estados Unidos' AND list_id=(SELECT id FROM lists WHERE name='country')),
+  (SELECT id FROM list_values WHERE value='Travel' AND list_id=(SELECT id FROM lists WHERE name='niche')),
   0.0460
 WHERE (SELECT COUNT(*) FROM rpus) < 2;
 """
@@ -473,85 +466,19 @@ def get_db():
 
 def init_db():
     conn = get_db()
-    # Ejecutamos SCHEMA y SEEDS siempre para asegurar tablas y catálogos básicos
+    # Asegurar que las tablas existan con el SCHEMA actual
     conn.executescript(SCHEMA)
     conn.executescript(SEEDS)
     
-    try:
-        conn.execute("ALTER TABLE revenues ADD COLUMN niche_id INTEGER REFERENCES list_values(id)")
-        conn.commit()
-        print("[DB] Columna 'niche_id' añadida a revenues")
-    except: pass
-
-    try:
-        conn.execute("ALTER TABLE ambassadors ADD COLUMN notes TEXT")
-        conn.commit()
-        print("[DB] Columna 'notes' añadida a ambassadors")
-    except:
-        pass # Ya existe
-    
-    # REPARACIÓN DE LLAVES FORÁNEAS CORRUPTAS (contracts -> profile_analyses_old, etc.)
+    # LIMPIEZA DE TABLAS ANTIGUAS
     try:
         conn.execute("PRAGMA foreign_keys = OFF")
-        
-        # 1. Reparar CONTRACTS
-        sql_contracts = conn.execute("SELECT sql FROM sqlite_master WHERE name='contracts'").fetchone()
-        if sql_contracts and 'profile_analyses_old' in sql_contracts[0]:
-            print("[DB] Reparando llaves foráneas en 'contracts'...")
-            conn.execute("ALTER TABLE contracts RENAME TO contracts_repair")
-            conn.execute("""
-                CREATE TABLE contracts (
-                    id                       INTEGER PRIMARY KEY AUTOINCREMENT,
-                    profile_id               INTEGER NOT NULL REFERENCES profiles(id),
-                    status_id                INTEGER NOT NULL REFERENCES list_values(id),
-                    currency_id              INTEGER REFERENCES list_values(id),
-                    price_per_standard_post  REAL,
-                    price_per_top_post       REAL,
-                    monthly_standard_posts   INTEGER DEFAULT 0,
-                    monthly_top_posts        INTEGER DEFAULT 0,
-                    last_analysis_id         INTEGER REFERENCES profile_analyses(id),
-                    signing_at               TEXT,
-                    end_at                   TEXT,
-                    pdf_url                  TEXT,
-                    created_at               TEXT NOT NULL DEFAULT (datetime('now'))
-                )
-            """)
-            conn.execute("INSERT INTO contracts SELECT * FROM contracts_repair")
-            conn.execute("DROP TABLE contracts_repair")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_con_profile ON contracts(profile_id)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_con_status  ON contracts(status_id)")
-            conn.commit()
-
-        # 2. Reparar POST_VIEWS_HISTORY
-        sql_v = conn.execute("SELECT sql FROM sqlite_master WHERE name='post_views_history'").fetchone()
-        if sql_v and 'posts_old' in sql_v[0]:
-            print("[DB] Reparando llaves foráneas en 'post_views_history'...")
-            conn.execute("ALTER TABLE post_views_history RENAME TO pvh_repair")
-            conn.execute("""
-                CREATE TABLE post_views_history (
-                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                    post_id     INTEGER NOT NULL REFERENCES posts(id),
-                    views_date  TEXT    NOT NULL,
-                    new_views   INTEGER NOT NULL DEFAULT 0,
-                    UNIQUE(post_id, views_date)
-                )
-            """)
-            conn.execute("INSERT INTO post_views_history SELECT * FROM pvh_repair")
-            conn.execute("DROP TABLE pvh_repair")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_pvh_post ON post_views_history(post_id, views_date)")
-            conn.commit()
-
-        # 3. Limpieza final de tablas _old (si quedara alguna)
-        for tbl in ['posts', 'profile_analyses']:
-            conn.execute(f"DROP TABLE IF EXISTS {tbl}_old")
-        
+        for tbl in ['posts_old', 'profile_analyses_old', 'contracts_repair', 'contracts_old', 'pvh_repair', 'post_views_history']:
+            conn.execute(f"DROP TABLE IF EXISTS {tbl}")
         conn.execute("PRAGMA foreign_keys = ON")
         conn.commit()
-        print("[DB] Reparación de integridad completada.")
-    except Exception as e:
-        print(f"[DB] Error en reparación profunda: {e}")
-        conn.execute("PRAGMA foreign_keys = ON")
-        conn.commit()
+    except:
+        pass
 
     conn.commit()
     conn.close()
@@ -648,7 +575,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):  self.handle_method('GET')
     # ── Utilidades de scraping para vistas reales ──────
-    def fetch_real_views(self, platform_code, url):
+    def fetch_real_views(self, platform_value, url):
         if not url: return None
         try:
             user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
@@ -681,7 +608,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             print("[Sync] Iniciando sincronización de visualizaciones reales...")
             posts = self.db.execute("""
-                SELECT po.id, po.url, lv.code as platform_code 
+                SELECT po.id, po.url, lv.value as platform_value 
                 FROM posts po
                 JOIN profiles p ON p.id = po.profile_id
                 JOIN list_values lv ON lv.id = p.platform_id
@@ -689,13 +616,13 @@ class Handler(BaseHTTPRequestHandler):
             
             updated = 0
             for p in posts:
-                real_v = self.fetch_real_views(p['platform_code'], p['url'])
+                real_v = self.fetch_real_views(p['platform_value'], p['url'])
                 if real_v is not None:
-                    last_v = self.db.execute("SELECT SUM(new_views) FROM post_views_history WHERE post_id=?", (p['id'],)).fetchone()[0] or 0
+                    last_v = self.db.execute("SELECT SUM(new_views) FROM daily_views WHERE post_id=?", (p['id'],)).fetchone()[0] or 0
                     if real_v > last_v:
                         diff = real_v - last_v
-                        self.db.execute("INSERT OR IGNORE INTO post_views_history (post_id, new_views, views_date) VALUES (?, 0, date('now'))", (p['id'],))
-                        self.db.execute("UPDATE post_views_history SET new_views = new_views + ? WHERE post_id=? AND views_date=date('now')", (diff, p['id']))
+                        self.db.execute("INSERT OR IGNORE INTO daily_views (post_id, new_views, views_date) VALUES (?, 0, date('now'))", (p['id'],))
+                        self.db.execute("UPDATE daily_views SET new_views = new_views + ? WHERE post_id=? AND views_date=date('now')", (diff, p['id']))
                         updated += 1
             
             self.db.commit()
@@ -962,13 +889,13 @@ class Handler(BaseHTTPRequestHandler):
         sql = """
             SELECT a.id, a.email, a.first_name, a.last_name, a.primary_language_id, a.country_id, a.created_at,
               lv_lang.value  AS language,
-              lv_lang.code   AS language_code,
+              lv_lang.value   AS language_code,
               lv_country.value AS country,
-              lv_country.code  AS country_code,
+              lv_country.value  AS country_value,
               (SELECT COUNT(*) FROM profiles p WHERE p.ambassador_id = a.id) AS profile_count,
               (SELECT status_id FROM contracts c JOIN profiles p2 ON p2.id=c.profile_id
                WHERE p2.ambassador_id=a.id ORDER BY c.created_at DESC LIMIT 1) AS latest_contract_status_id,
-              (SELECT lv.code FROM contracts c
+              (SELECT lv.value FROM contracts c
                JOIN profiles p2 ON p2.id=c.profile_id
                JOIN list_values lv ON lv.id=c.status_id
                WHERE p2.ambassador_id=a.id ORDER BY c.created_at DESC LIMIT 1) AS latest_contract_status
@@ -978,22 +905,22 @@ class Handler(BaseHTTPRequestHandler):
         """
         params = []
         where  = []
-        if qs.get('country_code'):
-            where.append('lv_country.code = ?'); params.append(qs['country_code'][0])
-        if qs.get('platform_code'):
-            where.append('EXISTS (SELECT 1 FROM profiles pf JOIN list_values lv_p ON lv_p.id=pf.platform_id WHERE pf.ambassador_id=a.id AND lv_p.code=?)')
-            params.append(qs['platform_code'][0])
-        if qs.get('niche_code'):
-            where.append('EXISTS (SELECT 1 FROM profiles pf JOIN list_values lv_n ON lv_n.id=pf.niche_id WHERE pf.ambassador_id=a.id AND lv_n.code=?)')
-            params.append(qs['niche_code'][0])
-        if qs.get('status_code'):
+        if qs.get('country_value'):
+            where.append('lv_country.value = ?'); params.append(qs['country_value'][0])
+        if qs.get('platform_value'):
+            where.append('EXISTS (SELECT 1 FROM profiles pf JOIN list_values lv_p ON lv_p.id=pf.platform_id WHERE pf.ambassador_id=a.id AND lv_p.value=?)')
+            params.append(qs['platform_value'][0])
+        if qs.get('niche_value'):
+            where.append('EXISTS (SELECT 1 FROM profiles pf JOIN list_values lv_n ON lv_n.id=pf.niche_id WHERE pf.ambassador_id=a.id AND lv_n.value=?)')
+            params.append(qs['niche_value'][0])
+        if qs.get('status_value'):
             where.append("""
-                (SELECT lv_s.code FROM contracts c 
+                (SELECT lv_s.value FROM contracts c 
                  JOIN profiles p2 ON p2.id=c.profile_id 
                  JOIN list_values lv_s ON lv_s.id=c.status_id 
                  WHERE p2.ambassador_id=a.id ORDER BY c.created_at DESC LIMIT 1) = ?
             """)
-            params.append(qs['status_code'][0])
+            params.append(qs['status_value'][0])
         if qs.get('search'):
             where.append("(a.first_name || ' ' || COALESCE(a.last_name,'') || ' ' || a.email LIKE ?)")
             params.append(f'%{qs["search"][0]}%')
@@ -1007,8 +934,8 @@ class Handler(BaseHTTPRequestHandler):
     def get_ambassador(self, aid):
         row = self.db.execute("""
             SELECT a.id, a.email, a.first_name, a.last_name, a.primary_language_id, a.country_id, a.created_at,
-              lv_lang.value  AS language, lv_lang.code AS language_code,
-              lv_country.value AS country, lv_country.code AS country_code
+              lv_lang.value  AS language, lv_lang.value AS language_code,
+              lv_country.value AS country, lv_country.value AS country_value
             FROM ambassadors a
             LEFT JOIN list_values lv_lang    ON lv_lang.id    = a.primary_language_id
             LEFT JOIN list_values lv_country ON lv_country.id = a.country_id
@@ -1041,7 +968,7 @@ class Handler(BaseHTTPRequestHandler):
     def delete_ambassador(self, aid):
         try:
             self.db.execute("PRAGMA foreign_keys = OFF")
-            self.db.execute("""DELETE FROM post_views_history WHERE post_id IN 
+            self.db.execute("""DELETE FROM daily_views WHERE post_id IN 
                           (SELECT id FROM posts WHERE profile_id IN 
                           (SELECT id FROM profiles WHERE ambassador_id=?))""", (aid,))
             self.db.execute("""DELETE FROM posts WHERE profile_id IN 
@@ -1064,14 +991,14 @@ class Handler(BaseHTTPRequestHandler):
         sql = """
             SELECT p.*,
               a.first_name || ' ' || COALESCE(a.last_name,'') AS ambassador_name,
-              lv_plat.value AS platform, lv_plat.code AS platform_code,
-              lv_niche.value AS niche,   lv_niche.code AS niche_code,
+              lv_plat.value AS platform, lv_plat.value AS platform_value,
+              lv_niche.value AS niche,   lv_niche.value AS niche_value,
               (SELECT pa.expected_views FROM profile_analyses pa WHERE pa.profile_id=p.id
                ORDER BY pa.created_at DESC LIMIT 1) AS expected_views,
               (SELECT pa.content_target_score FROM profile_analyses pa WHERE pa.profile_id=p.id
                ORDER BY pa.created_at DESC LIMIT 1) AS content_score,
-              (SELECT SUM(pvh.new_views) FROM post_views_history pvh
-               JOIN posts po ON po.id=pvh.post_id WHERE po.profile_id=p.id) AS total_views
+              (SELECT SUM(dv.new_views) FROM daily_views dv
+               JOIN posts po ON po.id=dv.post_id WHERE po.profile_id=p.id) AS total_views
             FROM profiles p
             JOIN ambassadors a ON a.id = p.ambassador_id
             LEFT JOIN list_values lv_plat  ON lv_plat.id  = p.platform_id
@@ -1083,15 +1010,15 @@ class Handler(BaseHTTPRequestHandler):
             where.append('p.ambassador_id=?'); params.append(qs['ambassador_id'][0])
         if qs.get('platform_id'):
             where.append('p.platform_id=?'); params.append(qs['platform_id'][0])
-        if qs.get('platform_code'):
-            where.append('lv_plat.code=?'); params.append(qs['platform_code'][0])
+        if qs.get('platform_value'):
+            where.append('lv_plat.value=?'); params.append(qs['platform_value'][0])
         if qs.get('niche_id'):
             where.append('p.niche_id=?'); params.append(qs['niche_id'][0])
-        if qs.get('niche_code'):
-            where.append('lv_niche.code=?'); params.append(qs['niche_code'][0])
-        if qs.get('country_code'):
+        if qs.get('niche_value'):
+            where.append('lv_niche.value=?'); params.append(qs['niche_value'][0])
+        if qs.get('country_value'):
             where.append('a.country_id = (SELECT id FROM list_values WHERE UPPER(code)=UPPER(?))')
-            params.append(qs['country_code'][0])
+            params.append(qs['country_value'][0])
         if where:
             sql += ' WHERE ' + ' AND '.join(where)
         sql += ' ORDER BY a.first_name, p.id'
@@ -1102,8 +1029,8 @@ class Handler(BaseHTTPRequestHandler):
         row = self.db.execute("""
             SELECT p.*,
               a.first_name || ' ' || COALESCE(a.last_name,'') AS ambassador_name,
-              lv_plat.value AS platform, lv_plat.code AS platform_code,
-              lv_niche.value AS niche, lv_niche.code AS niche_code
+              lv_plat.value AS platform, lv_plat.value AS platform_value,
+              lv_niche.value AS niche, lv_niche.value AS niche_value
             FROM profiles p
             JOIN ambassadors a ON a.id=p.ambassador_id
             LEFT JOIN list_values lv_plat  ON lv_plat.id  = p.platform_id
@@ -1142,7 +1069,7 @@ class Handler(BaseHTTPRequestHandler):
     def delete_profile(self, pid):
         try:
             self.db.execute("PRAGMA foreign_keys = OFF")
-            self.db.execute("DELETE FROM post_views_history WHERE post_id IN (SELECT id FROM posts WHERE profile_id=?)", (pid,))
+            self.db.execute("DELETE FROM daily_views WHERE post_id IN (SELECT id FROM posts WHERE profile_id=?)", (pid,))
             self.db.execute("DELETE FROM posts WHERE profile_id=?", (pid,))
             self.db.execute("DELETE FROM contracts WHERE profile_id=?", (pid,))
             self.db.execute("DELETE FROM profile_analyses WHERE profile_id=?", (pid,))
@@ -1182,11 +1109,11 @@ class Handler(BaseHTTPRequestHandler):
     def get_contracts(self, qs={}):
         sql = """
             SELECT c.*,
-              lv_st.value AS status, lv_st.code AS status_code,
-              lv_cur.value AS currency, lv_cur.code AS currency_code,
+              lv_st.value AS status, lv_st.value AS status_value,
+              lv_cur.value AS currency, lv_cur.value AS currency_value,
               p.handle, p.ambassador_id,
               a.first_name || ' ' || COALESCE(a.last_name,'') AS ambassador_name,
-              lv_plat.value AS platform, lv_plat.code AS platform_code,
+              lv_plat.value AS platform, lv_plat.value AS platform_value,
               (c.price_per_standard_post * c.monthly_standard_posts +
                COALESCE(c.price_per_top_post,0) * COALESCE(c.monthly_top_posts,0)) * 12
                AS expected_annual_revenue
@@ -1203,16 +1130,16 @@ class Handler(BaseHTTPRequestHandler):
             where.append('c.profile_id=?'); params.append(qs['profile_id'][0])
         if qs.get('ambassador_id'):
             where.append('p.ambassador_id=?'); params.append(qs['ambassador_id'][0])
-        if qs.get('status_code'):
-            where.append('lv_st.code=?'); params.append(qs['status_code'][0])
-        if qs.get('country_code'):
+        if qs.get('status_value'):
+            where.append('lv_st.value=?'); params.append(qs['status_value'][0])
+        if qs.get('country_value'):
             where.append('a.country_id = (SELECT id FROM list_values WHERE UPPER(code)=UPPER(?))')
-            params.append(qs['country_code'][0])
-        if qs.get('niche_code'):
+            params.append(qs['country_value'][0])
+        if qs.get('niche_value'):
             where.append('p.niche_id = (SELECT id FROM list_values WHERE UPPER(code)=UPPER(?))')
-            params.append(qs['niche_code'][0])
-        if qs.get('platform_code'):
-            where.append('lv_plat.code=?'); params.append(qs['platform_code'][0])
+            params.append(qs['niche_value'][0])
+        if qs.get('platform_value'):
+            where.append('lv_plat.value=?'); params.append(qs['platform_value'][0])
         if where:
             sql += ' WHERE ' + ' AND '.join(where)
         sql += ' ORDER BY c.created_at DESC'
@@ -1221,8 +1148,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def get_contract(self, cid):
         row = self.db.execute("""
-            SELECT c.*, lv_st.value AS status, lv_st.code AS status_code,
-              lv_cur.value AS currency, lv_cur.code AS currency_code,
+            SELECT c.*, lv_st.value AS status, lv_st.value AS status_value,
+              lv_cur.value AS currency, lv_cur.value AS currency_value,
               p.handle, p.ambassador_id
             FROM contracts c
             JOIN profiles p ON p.id=c.profile_id
@@ -1238,12 +1165,12 @@ class Handler(BaseHTTPRequestHandler):
         cur = self.db.execute("""
             INSERT INTO contracts(profile_id,status_id,currency_id,
               price_per_standard_post,price_per_top_post,
-              monthly_standard_posts,monthly_top_posts,signing_at,end_at,pdf_url)
+              monthly_standard_posts,monthly_top_posts,signing_at,end_at,contract_file_url)
             VALUES(?,?,?,?,?,?,?,?,?,?)""",
             (body.get('profile_id'), body.get('status_id'), body.get('currency_id'),
              body.get('price_per_standard_post'), body.get('price_per_top_post'),
              body.get('monthly_standard_posts',0), body.get('monthly_top_posts',0),
-             body.get('signing_at'), body.get('end_at'), body.get('pdf_url'))
+             body.get('signing_at'), body.get('end_at'), body.get('contract_file_url'))
         )
         self.db.commit()
         row = self.db.execute("SELECT * FROM contracts WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -1254,11 +1181,11 @@ class Handler(BaseHTTPRequestHandler):
         self.db.execute("""UPDATE contracts SET status_id=?,currency_id=?,
               price_per_standard_post=?,price_per_top_post=?,
               monthly_standard_posts=?,monthly_top_posts=?,
-              signing_at=?,end_at=?,pdf_url=? WHERE id=?""",
+              signing_at=?,end_at=?,contract_file_url=? WHERE id=?""",
             (body.get('status_id'), body.get('currency_id'),
              body.get('price_per_standard_post'), body.get('price_per_top_post'),
              body.get('monthly_standard_posts',0), body.get('monthly_top_posts',0),
-             body.get('signing_at'), body.get('end_at'), body.get('pdf_url'), cid))
+             body.get('signing_at'), body.get('end_at'), body.get('contract_file_url'), cid))
         self.db.commit()
         row = self.db.execute("SELECT * FROM contracts WHERE id=?", (cid,)).fetchone()
         self.send_json(dict(row))
@@ -1276,17 +1203,17 @@ class Handler(BaseHTTPRequestHandler):
     def get_posts(self, qs={}):
         sql = """
             SELECT po.*,
-              lv_mt.value AS mention_type, lv_mt.code AS mention_type_code,
+              lv_mt.value AS mention_type, lv_mt.value AS mention_type_value,
               p.handle, p.ambassador_id,
               a.first_name || ' ' || COALESCE(a.last_name,'') AS ambassador_name,
-              lv_plat.value AS platform, lv_plat.code AS platform_code,
-              COALESCE(SUM(pvh.new_views),0) AS total_views
+              lv_plat.value AS platform, lv_plat.value AS platform_value,
+              COALESCE(SUM(dv.new_views),0) AS total_views
             FROM posts po
             JOIN profiles p ON p.id = po.profile_id
             JOIN ambassadors a ON a.id = p.ambassador_id
             LEFT JOIN list_values lv_mt   ON lv_mt.id   = po.mention_type_id
             LEFT JOIN list_values lv_plat ON lv_plat.id = p.platform_id
-            LEFT JOIN post_views_history pvh ON pvh.post_id = po.id
+            LEFT JOIN daily_views dv ON dv.post_id = po.id
         """
         params = []
         where = []
@@ -1294,16 +1221,16 @@ class Handler(BaseHTTPRequestHandler):
             where.append('po.profile_id=?'); params.append(qs['profile_id'][0])
         if qs.get('ambassador_id'):
             where.append('p.ambassador_id=?'); params.append(qs['ambassador_id'][0])
-        if qs.get('platform_code'):
-            where.append('lv_plat.code=?'); params.append(qs['platform_code'][0])
-        if qs.get('mention_type_code'):
-            where.append('lv_mt.code=?'); params.append(qs['mention_type_code'][0])
-        if qs.get('country_code'):
+        if qs.get('platform_value'):
+            where.append('lv_plat.value=?'); params.append(qs['platform_value'][0])
+        if qs.get('mention_type_value'):
+            where.append('lv_mt.value=?'); params.append(qs['mention_type_value'][0])
+        if qs.get('country_value'):
             where.append('a.country_id = (SELECT id FROM list_values WHERE UPPER(code)=UPPER(?))')
-            params.append(qs['country_code'][0])
-        if qs.get('niche_code'):
+            params.append(qs['country_value'][0])
+        if qs.get('niche_value'):
             where.append('p.niche_id = (SELECT id FROM list_values WHERE UPPER(code)=UPPER(?))')
-            params.append(qs['niche_code'][0])
+            params.append(qs['niche_value'][0])
         if where:
             sql += ' WHERE ' + ' AND '.join(where)
         sql += ' GROUP BY po.id ORDER BY po.published_at DESC'
@@ -1312,13 +1239,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def get_post(self, pid):
         row = self.db.execute("""
-            SELECT po.*, lv_mt.value AS mention_type, lv_mt.code AS mention_type_code,
+            SELECT po.*, lv_mt.value AS mention_type, lv_mt.value AS mention_type_value,
               p.handle, p.ambassador_id,
-              COALESCE(SUM(pvh.new_views),0) AS total_views
+              COALESCE(SUM(dv.new_views),0) AS total_views
             FROM posts po
             JOIN profiles p ON p.id=po.profile_id
             LEFT JOIN list_values lv_mt ON lv_mt.id=po.mention_type_id
-            LEFT JOIN post_views_history pvh ON pvh.post_id=po.id
+            LEFT JOIN daily_views dv ON dv.post_id=po.id
             WHERE po.id=? GROUP BY po.id
         """, (pid,)).fetchone()
         if not row: return self.send_err('Not found', 404)
@@ -1357,7 +1284,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             # Forzar limpieza de cualquier cosa que apunte al post
             self.db.execute("PRAGMA foreign_keys = OFF")
-            self.db.execute("DELETE FROM post_views_history WHERE post_id=?", (pid,))
+            self.db.execute("DELETE FROM daily_views WHERE post_id=?", (pid,))
             self.db.execute("DELETE FROM posts WHERE id=?", (pid,))
             self.db.commit()
             self.db.execute("PRAGMA foreign_keys = ON")
@@ -1367,7 +1294,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_err(str(e), 500)
     # ── POST VIEWS ───────────────────────────────────────────
     def get_post_views(self, qs={}):
-        sql = "SELECT * FROM post_views_history"
+        sql = "SELECT * FROM daily_views"
         params = []
         if qs.get('post_id'):
             sql += ' WHERE post_id=?'; params.append(qs['post_id'][0])
@@ -1378,19 +1305,19 @@ class Handler(BaseHTTPRequestHandler):
     def create_post_views(self):
         body = self.read_body()
         cur = self.db.execute(
-            "INSERT OR REPLACE INTO post_views_history(post_id,views_date,new_views) VALUES(?,?,?)",
+            "INSERT OR REPLACE INTO daily_views(post_id,views_date,new_views) VALUES(?,?,?)",
             (body.get('post_id'), body.get('views_date'), body.get('new_views',0))
         )
         self.db.commit()
-        row = self.db.execute("SELECT * FROM post_views_history WHERE id=?", (cur.lastrowid,)).fetchone()
+        row = self.db.execute("SELECT * FROM daily_views WHERE id=?", (cur.lastrowid,)).fetchone()
         self.send_json(dict(row), 201)
 
     # ── REVENUES ─────────────────────────────────────────────
     def get_revenues(self, qs={}):
         rows = self.db.execute("""
-            SELECT r.*, lv_c.value AS country, lv_c.code AS country_code,
-              lv_n.value AS niche, lv_n.code AS niche_code,
-              lv_cur.value AS currency, lv_cur.code AS currency_code
+            SELECT r.*, lv_c.value AS country, lv_c.value AS country_value,
+              lv_n.value AS niche, lv_n.value AS niche_value,
+              lv_cur.value AS currency, lv_cur.value AS currency_value
             FROM revenues r
             LEFT JOIN list_values lv_c   ON lv_c.id   = r.country_id
             LEFT JOIN list_values lv_n   ON lv_n.id   = r.niche_id
@@ -1416,8 +1343,8 @@ class Handler(BaseHTTPRequestHandler):
     # ── RPUS ─────────────────────────────────────────────────
     def get_rpus(self, qs={}):
         rows = self.db.execute("""
-            SELECT r.*, lv_c.value AS country, lv_c.code AS country_code,
-              lv_n.value AS niche, lv_n.code AS niche_code
+            SELECT r.*, lv_c.value AS country, lv_c.value AS country_value,
+              lv_n.value AS niche, lv_n.value AS niche_value
             FROM rpus r
             LEFT JOIN list_values lv_c ON lv_c.id = r.country_id
             LEFT JOIN list_values lv_n ON lv_n.id = r.niche_id
@@ -1458,15 +1385,15 @@ class Handler(BaseHTTPRequestHandler):
         # Recogemos filtros básicos
         if qs:
             print(f"📊 Dashboard Request Params: {qs}", flush=True)
-            if qs.get('country_code') and qs['country_code'][0]:
+            if qs.get('country_value') and qs['country_value'][0]:
                 where_parts.append('a.country_id = (SELECT id FROM list_values WHERE UPPER(code)=UPPER(?))')
-                params.append(qs['country_code'][0])
-            if qs.get('niche_code') and qs['niche_code'][0]:
+                params.append(qs['country_value'][0])
+            if qs.get('niche_value') and qs['niche_value'][0]:
                 where_parts.append('p.niche_id = (SELECT id FROM list_values WHERE UPPER(code)=UPPER(?))')
-                params.append(qs['niche_code'][0])
-            if qs.get('platform_code') and qs['platform_code'][0]:
+                params.append(qs['niche_value'][0])
+            if qs.get('platform_value') and qs['platform_value'][0]:
                 where_parts.append('p.platform_id = (SELECT id FROM list_values WHERE UPPER(code)=UPPER(?))')
-                params.append(qs['platform_code'][0])
+                params.append(qs['platform_value'][0])
             if qs.get('ambassador_id'):
                 where_parts.append('a.id = ?')
                 params.append(qs['ambassador_id'][0])
@@ -1474,7 +1401,7 @@ class Handler(BaseHTTPRequestHandler):
                 days = qs['days'][0]
 
         # Base join robusta
-        needs_p = any(k in qs for k in ['niche_code', 'platform_code']) if qs else False
+        needs_p = any(k in qs for k in ['niche_value', 'platform_value']) if qs else False
         join_type = "JOIN" if needs_p else "LEFT JOIN"
         base_from = f"FROM ambassadors a {join_type} profiles p ON p.ambassador_id = a.id"
         
@@ -1491,7 +1418,7 @@ class Handler(BaseHTTPRequestHandler):
         total_profiles    = res[1]
         
         # Contratos firmados
-        w_sql_s, _ = build_where(["lv_s.code='signed'"])
+        w_sql_s, _ = build_where(["lv_s.value='signed'"])
         signed_contracts = self.db.execute(f"""
             SELECT COUNT(DISTINCT c.id) {base_from}
             JOIN contracts c ON c.profile_id = p.id
@@ -1500,13 +1427,13 @@ class Handler(BaseHTTPRequestHandler):
         """, params).fetchone()[0] or 0
 
         # Revenue Esperado (NUEVA FÓRMULA PERFORMANCE-BASED)
-        w_sql_s, _ = build_where(["lv_s.code='signed'"])
+        w_sql_s, _ = build_where(["lv_s.value='signed'"])
         rows_perf = self.db.execute(f"""
             SELECT 
                 c.monthly_standard_posts, c.monthly_top_posts,
                 pa.expected_views, pa.cache_score, pa.content_target_score, pa.country_target_score,
-                lv_plat.code AS platform_code,
-                lv_country.code AS country_code
+                lv_plat.value AS platform_value,
+                lv_country.value AS country_value
             {base_from}
             JOIN contracts c ON c.profile_id = p.id
             JOIN list_values lv_s ON lv_s.id = c.status_id
@@ -1534,7 +1461,7 @@ class Handler(BaseHTTPRequestHandler):
             if ev == 0: continue
             
             # 1. Country Multiplier
-            c_code = (r['country_code'] or '').upper()
+            c_code = (r['country_value'] or '').upper()
             country_mult = COUNTRY_RPM_MULT.get(c_code)
             if country_mult is None:
                 if c_code in LATAM_CODES: country_mult = 0.40
@@ -1558,7 +1485,7 @@ class Handler(BaseHTTPRequestHandler):
             base_val_post = (ev / 1000.0) * 42.0 * country_mult * cache_mult * cts * cots_adj
             
             # 4. Platform/Type Multipliers
-            p_code = (r['platform_code'] or '').lower()
+            p_code = (r['platform_value'] or '').lower()
             m_std = r['monthly_standard_posts'] or 0
             m_top = r['monthly_top_posts'] or 0
             
@@ -1571,28 +1498,28 @@ class Handler(BaseHTTPRequestHandler):
                 expected_revenue += 0
 
         # Revenue Real (Automático basado en visualizaciones reales y fórmula oficial)
-        real_conds = ["pvh.views_date >= date('now', ?)"]
+        real_conds = ["dv.views_date >= date('now', ?)"]
         w_sql_real, _ = build_where(real_conds)
         # Obtenemos las views reales por post y los datos de su perfil para aplicar la fórmula
         rows_real = self.db.execute(f"""
             SELECT 
                 po.id AS post_id,
-                SUM(pvh.new_views) AS real_views,
+                SUM(dv.new_views) AS real_views,
                 pa.cache_score, pa.content_target_score, pa.country_target_score,
-                lv_plat.code AS platform_code,
-                lv_country.code AS country_code,
-                lv_mt.code AS mention_type_code
+                lv_plat.value AS platform_value,
+                lv_country.value AS country_value,
+                lv_mt.value AS mention_type_value
             {base_from}
             JOIN contracts c ON c.profile_id = p.id
             JOIN list_values lv_s ON lv_s.id = c.status_id
             JOIN posts po ON po.profile_id = p.id
-            JOIN post_views_history pvh ON pvh.post_id = po.id
+            JOIN daily_views dv ON dv.post_id = po.id
             LEFT JOIN list_values lv_plat ON lv_plat.id = p.platform_id
             LEFT JOIN list_values lv_country ON lv_country.id = a.country_id
             LEFT JOIN list_values lv_mt ON lv_mt.id = po.mention_type_id
             LEFT JOIN profile_analyses pa ON pa.id = 
                 (SELECT id FROM profile_analyses WHERE profile_id=p.id ORDER BY created_at DESC LIMIT 1)
-            {w_sql_real} AND lv_s.code='signed'
+            {w_sql_real} AND lv_s.value='signed'
             GROUP BY po.id
         """, params + [f'-{days} days']).fetchall()
 
@@ -1601,7 +1528,7 @@ class Handler(BaseHTTPRequestHandler):
             rv = r['real_views'] or 0
             if rv <= 0: continue
             
-            c_code = (r['country_code'] or '').upper()
+            c_code = (r['country_value'] or '').upper()
             country_mult = COUNTRY_RPM_MULT.get(c_code)
             if country_mult is None:
                 if c_code in LATAM_CODES: country_mult = 0.40
@@ -1621,8 +1548,8 @@ class Handler(BaseHTTPRequestHandler):
             
             base_val_post = (rv / 1000.0) * 42.0 * country_mult * cache_mult * cts * cots_adj
             
-            p_code = (r['platform_code'] or '').lower()
-            mt_code = (r['mention_type_code'] or '').lower()
+            p_code = (r['platform_value'] or '').lower()
+            mt_code = (r['mention_type_value'] or '').lower()
             
             if p_code == 'youtube':
                 if mt_code == 'om_mention':
@@ -1637,22 +1564,22 @@ class Handler(BaseHTTPRequestHandler):
         # Views totales
         w_sql_v, _ = build_where()
         total_views = self.db.execute(f"""
-            SELECT COALESCE(SUM(pvh.new_views),0) {base_from}
+            SELECT COALESCE(SUM(dv.new_views),0) {base_from}
             JOIN posts po ON po.profile_id = p.id
-            JOIN post_views_history pvh ON pvh.post_id = po.id
+            JOIN daily_views dv ON dv.post_id = po.id
             {w_sql_v}
         """, params).fetchone()[0] or 0
 
         # 2. Tendencia de Views
-        trend_conds = ["pvh.views_date >= date('now', ?)"]
+        trend_conds = ["dv.views_date >= date('now', ?)"]
         w_sql_t, _ = build_where(trend_conds)
         # El parámetro de la fecha va al FINAL porque trend_conds se añade al final de where_parts
         trend_rows = self.db.execute(f"""
-            SELECT pvh.views_date, SUM(pvh.new_views) AS views {base_from}
+            SELECT dv.views_date, SUM(dv.new_views) AS views {base_from}
             JOIN posts po ON po.profile_id = p.id
-            JOIN post_views_history pvh ON pvh.post_id = po.id
+            JOIN daily_views dv ON dv.post_id = po.id
             {w_sql_t}
-            GROUP BY pvh.views_date ORDER BY pvh.views_date
+            GROUP BY dv.views_date ORDER BY dv.views_date
         """, params + [f'-{days} days']).fetchall()
         trend = [dict(r) for r in trend_rows]
 
@@ -1670,15 +1597,15 @@ class Handler(BaseHTTPRequestHandler):
         w_sql_top, _ = build_where()
         top_rows = self.db.execute(f"""
             SELECT a.id, a.first_name || ' ' || COALESCE(a.last_name,'') AS name,
-                   lv_c.code AS country_code,
-                   (SELECT lv_p.code FROM profiles p2 JOIN list_values lv_p ON lv_p.id = p2.platform_id WHERE p2.ambassador_id = a.id LIMIT 1) AS platform_code,
-                   (SELECT lv_s.code FROM contracts c2 JOIN list_values lv_s ON lv_s.id = c2.status_id WHERE c2.profile_id IN (SELECT id FROM profiles WHERE ambassador_id = a.id) ORDER BY c2.id DESC LIMIT 1) AS contract_status,
-                   COALESCE(SUM(pvh.new_views),0) AS total_views,
+                   lv_c.value AS country_value,
+                   (SELECT lv_p.value FROM profiles p2 JOIN list_values lv_p ON lv_p.id = p2.platform_id WHERE p2.ambassador_id = a.id LIMIT 1) AS platform_value,
+                   (SELECT lv_s.value FROM contracts c2 JOIN list_values lv_s ON lv_s.id = c2.status_id WHERE c2.profile_id IN (SELECT id FROM profiles WHERE ambassador_id = a.id) ORDER BY c2.id DESC LIMIT 1) AS contract_status,
+                   COALESCE(SUM(dv.new_views),0) AS total_views,
                    AVG(po.content_score) as avg_score
             {base_from}
             LEFT JOIN list_values lv_c ON lv_c.id = a.country_id
             LEFT JOIN posts po ON po.profile_id = p.id
-            LEFT JOIN post_views_history pvh ON pvh.post_id = po.id
+            LEFT JOIN daily_views dv ON dv.post_id = po.id
             {w_sql_top}
             GROUP BY a.id ORDER BY total_views DESC LIMIT 5
         """, params).fetchall()
@@ -1706,9 +1633,9 @@ if __name__ == "__main__":
     # MIGRACIONES FORZADAS (Para asegurar cambios en Railway)
     conn = get_db()
     try:
-        # 1. Asegurar columna pdf_url
-        conn.execute("ALTER TABLE contracts ADD COLUMN pdf_url TEXT;")
-        print("[DB] Columna pdf_url añadida.")
+        # 1. Asegurar columna contract_file_url
+        conn.execute("ALTER TABLE contracts ADD COLUMN contract_file_url TEXT;")
+        print("[DB] Columna contract_file_url añadida.")
     except: pass
 
     try:
@@ -1727,19 +1654,19 @@ if __name__ == "__main__":
         # Paso A: Renombrar los valores conocidos (Dedicado, Integrado, etc) a los nuevos nombres
         # Esto mantiene los IDs para que los posts antiguos se actualicen visualmente
         conn.execute("""
-            UPDATE list_values SET value='M (Mention)', code='m_mention', is_active=1
+            UPDATE list_values SET value='M (Mention)', value='M (Mention)', is_active=1
             WHERE list_id IN (SELECT id FROM lists WHERE name='mention_type') 
-            AND (code='m_mention' OR code='dedicated' OR value='Dedicado' OR value='Dedicated')
+            AND (value='M (Mention)' OR code='dedicated' OR value='Dedicado' OR value='Dedicated')
         """)
         conn.execute("""
-            UPDATE list_values SET value='OM (Organic Mention)', code='om_mention', is_active=1
+            UPDATE list_values SET value='OM (Organic Mention)', value='OM (Organic Mention)', is_active=1
             WHERE list_id IN (SELECT id FROM lists WHERE name='mention_type') 
-            AND (code='om_mention' OR code='integrated' OR value='Integrado' OR value='Integrated' OR value='Orgánico')
+            AND (value='OM (Organic Mention)' OR code='integrated' OR value='Integrado' OR value='Integrated' OR value='Orgánico')
         """)
         conn.execute("""
-            UPDATE list_values SET value='TikTok', code='tiktok', is_active=1
+            UPDATE list_values SET value='TikTok', value='TikTok', is_active=1
             WHERE list_id IN (SELECT id FROM lists WHERE name='mention_type') 
-            AND (code='tiktok' OR value='TikTok')
+            AND (value='TikTok' OR value='TikTok')
         """)
         
         # Paso B: DESACTIVAR TODO LO DEMÁS (Importante: COALESCE para tratar NULLs)

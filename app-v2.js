@@ -196,7 +196,7 @@ function listById(name, id) {
 }
 
 function listByCode(name, code) {
-  return (LISTS[name] || []).find(lv => lv.code === code) || null;
+  return (LISTS[name] || []).find(lv => lv.value === code) || null;
 }
 
 function listOptions(name, placeholder = '', selectedValue = null) {
@@ -213,7 +213,7 @@ function listOptions(name, placeholder = '', selectedValue = null) {
 function listCodeOptions(name, placeholder = '') {
   const items = LISTS[name] || [];
   const ph = placeholder ? `<option value="">${placeholder}</option>` : '';
-  return ph + items.map(lv => `<option value="${lv.code}">${lv.value}</option>`).join('');
+  return ph + items.map(lv => `<option value="${lv.value}">${lv.value}</option>`).join('');
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -470,9 +470,9 @@ async function renderDashboard() {
   const platform = document.getElementById('filter-platform')?.value;
 
   if (days) qs.days = days;
-  if (country) qs.country_code = country;
-  if (niche) qs.niche_code = niche;
-  if (platform) qs.platform_code = platform;
+  if (country) qs.country_value = country;
+  if (niche) qs.niche_value = niche;
+  if (platform) qs.platform_value = platform;
 
   const data = await GET('/dashboard', qs).catch(() => null);
   if (!data) return;
@@ -575,8 +575,8 @@ function renderTopTable(ambassadors) {
   tbody.innerHTML = (ambassadors || []).map(a => `
     <tr>
       <td><div class="avatar-cell"><div class="table-avatar">${initials(a.name)}</div>${a.name}</div></td>
-      <td><span class="badge badge-country">${a.country_code || '—'}</span></td>
-      <td>${platformBadge(a.platform_code)}</td>
+      <td><span class="badge badge-country">${a.country_value || '—'}</span></td>
+      <td>${platformBadge(a.platform_value)}</td>
       <td>${fmt(a.total_views, 'compact')}</td>
       <td>${scoreBar(a.avg_score)}</td>
       <td>${a.contract_status ? statusBadge(a.contract_status) : '<span style="color:var(--text-tertiary)">—</span>'}</td>
@@ -595,7 +595,7 @@ async function renderAmbassadors() {
   tbody.innerHTML = ambassadors.map(a => `
     <tr data-id="${a.id}" class="${selectedAmbassadorId === a.id ? 'selected' : ''}">
       <td><div class="avatar-cell"><div class="table-avatar">${initials(a.first_name + ' ' + (a.last_name || ''))}</div>${a.first_name} ${a.last_name || ''}</div></td>
-      <td><span class="badge badge-country">${a.country_code || '—'}</span></td>
+      <td><span class="badge badge-country">${a.country_value || '—'}</span></td>
       <td><span class="badge badge-lang">${a.language_code || '—'}</span></td>
       <td><strong>${a.profile_count || 0}</strong></td>
       <td>${a.latest_contract_status ? statusBadge(a.latest_contract_status) : '<span style="color:var(--text-tertiary)">—</span>'}</td>
@@ -623,10 +623,10 @@ function buildAmbassadorFilters() {
   const niche = document.getElementById('filter-niche')?.value;
 
   if (search) qs.search = search;
-  if (country) qs.country_code = country;
-  if (platform) qs.platform_code = platform;
-  if (status) qs.status_code = status;
-  if (niche) qs.niche_code = niche;
+  if (country) qs.country_value = country;
+  if (platform) qs.platform_value = platform;
+  if (status) qs.status_value = status;
+  if (niche) qs.niche_value = niche;
 
   return Object.keys(qs).length ? qs : null;
 }
@@ -651,7 +651,7 @@ async function openAmbassadorDetail(id) {
   document.getElementById('detail-avatar').textContent = initials(fullName);
   document.getElementById('detail-name').textContent = fullName;
   document.getElementById('detail-email').textContent = a.email;
-  document.getElementById('detail-country-badge').textContent = a.country_code || '—';
+  document.getElementById('detail-country-badge').textContent = a.country_value || '—';
   document.getElementById('detail-lang-badge').textContent = a.language_code || '—';
 
   switchDetailTab('overview');
@@ -709,7 +709,7 @@ function calcRealRevenue(post, platformCode, countryCode, pa) {
   const base_val_post = (rv / 1000.0) * 42.0 * countryMult * cacheMult * cts * cots_adj;
   
   const pCode = (platformCode || '').toLowerCase();
-  const mtCode = (post.mention_type_code || '').toLowerCase();
+  const mtCode = (post.mention_type_value || '').toLowerCase();
   
   if (pCode === 'youtube') {
     if (mtCode === 'om_mention') return base_val_post * 4.0;
@@ -770,7 +770,7 @@ async function renderDetailOverview() {
 
   // ── Status badge ──────────────────────────────────────────
   const latestContract = contracts[0];
-  const statusCode = latestContract?.status_code || '';
+  const statusCode = latestContract?.status_value || '';
   const statusLabel = latestContract?.status || '—';
   document.getElementById('detail-status-badge').innerHTML = latestContract
     ? statusBadge(statusCode, statusLabel)
@@ -814,7 +814,7 @@ async function renderDetailProfiles() {
   container.innerHTML = profiles.length
     ? profiles.map(p => `
         <div class="profile-item">
-          ${platformBadge(p.platform_code, p.platform)}
+          ${platformBadge(p.platform_value, p.platform)}
           <div class="profile-meta">
             <div class="profile-name">${p.handle || p.url}</div>
             <div class="profile-url">${p.url}</div>
@@ -824,26 +824,26 @@ async function renderDetailProfiles() {
             <button class="btn-icon" onclick="analyzeProfile(${p.id})" title="Análisis de rendimiento" style="color:var(--accent-teal)">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
             </button>
-            <button class="btn-icon" onclick="editProfile(${p.id})" title="Editar canal">
+            <button class="btn-icon" onclick="editProfile(${p.id})" title="Editar perfil">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             </button>
-            <button class="btn-icon" onclick="deleteProfile(${p.id})" title="Eliminar canal" style="color:var(--danger)">
+            <button class="btn-icon" onclick="deleteProfile(${p.id})" title="Eliminar perfil" style="color:var(--danger)">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
             </button>
           </div>
         </div>
       `).join('')
-    : '<p style="color:var(--text-tertiary);font-size:13px;text-align:center;padding:20px">Sin canales añadidos</p>';
+    : '<p style="color:var(--text-tertiary);font-size:13px;text-align:center;padding:20px">Sin perfiles añadidos</p>';
 }
 
 window.deleteProfile = async (pid) => {
-  if (!confirm('¿Eliminar este canal?')) return;
+  if (!confirm('¿Eliminar este perfil?')) return;
   try {
     await DELETE(`/profiles/${pid}`);
     await renderDetailProfiles();
     await renderAmbassadors();
   } catch (e) {
-    alert('Error al eliminar canal: ' + e.message);
+    alert('Error al eliminar perfil: ' + e.message);
   }
 };
 
@@ -935,15 +935,15 @@ async function renderDetailContracts() {
       const monthly = (c.price_per_standard_post || 0) * (c.monthly_standard_posts || 0) +
         (c.price_per_top_post || 0) * (c.monthly_top_posts || 0);
       return `<div class="contract-item">
-          ${platformBadge(c.platform_code, c.platform)}
+          ${platformBadge(c.platform_value, c.platform)}
           <div class="contract-meta">
             <div class="contract-type">${c.handle || '—'}</div>
             <div class="contract-dates">${c.signing_at ? c.signing_at.slice(0, 10) : '—'} → ${c.end_at ? c.end_at.slice(0, 10) : '—'}</div>
           </div>
           <span class="contract-value">${fmt(monthly * 12, 'currency')}/año</span>
-          ${statusBadge(c.status_code, c.status)}
+          ${statusBadge(c.status_value, c.status)}
           <div class="header-actions" style="margin-left: 10px;">
-            ${c.pdf_url ? `<a href="${c.pdf_url}" download="contrato_${c.handle ? c.handle.replace(/[@ ]/g, '') : 'embajador'}.pdf" class="btn-icon" title="Descargar PDF"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></a>` : ''}
+            ${c.contract_file_url ? `<a href="${c.contract_file_url}" download="contrato_${c.handle ? c.handle.replace(/[@ ]/g, '') : 'embajador'}.pdf" class="btn-icon" title="Descargar PDF"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></a>` : ''}
             <button class="btn-icon" onclick="editContract(${c.id})" title="Editar">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             </button>
@@ -1005,7 +1005,7 @@ window.editContract = async (cid) => {
     <div class="form-group">
       <label class="form-label">Subir Contrato (.pdf)</label>
       <input type="file" id="ec-pdf" accept=".pdf" class="filter-select" style="width:100%; padding: 4px;" />
-      ${c.pdf_url ? '<div style="margin-top:4px;font-size:11px"><a href="' + c.pdf_url + '" download="contrato_' + (c.handle ? c.handle.replace(/[@ ]/g, '') : 'embajador') + '.pdf" style="color:var(--accent-purple)">Ver PDF actual</a></div>' : ''}
+      ${c.contract_file_url ? '<div style="margin-top:4px;font-size:11px"><a href="' + c.contract_file_url + '" download="contrato_' + (c.handle ? c.handle.replace(/[@ ]/g, '') : 'embajador') + '.pdf" style="color:var(--accent-purple)">Ver PDF actual</a></div>' : ''}
     </div>
   `, async () => {
     const status_id = parseInt(document.getElementById('ec-status').value);
@@ -1018,18 +1018,18 @@ window.editContract = async (cid) => {
     const end_at = document.getElementById('ec-end').value || null;
     if (!status_id) { alert('Estado es obligatorio'); return false; }
     
-    let pdf_url = c.pdf_url;
+    let contract_file_url = c.contract_file_url;
     const pdfFile = document.getElementById('ec-pdf').files[0];
     if (pdfFile) {
        const reader = new FileReader();
-       pdf_url = await new Promise(res => { reader.onload = () => res(reader.result); reader.readAsDataURL(pdfFile); });
+       contract_file_url = await new Promise(res => { reader.onload = () => res(reader.result); reader.readAsDataURL(pdfFile); });
     }
 
     try {
       await PUT(`/contracts/${cid}`, {
         status_id, currency_id,
         price_per_standard_post, monthly_standard_posts,
-        price_per_top_post, monthly_top_posts, signing_at, end_at, pdf_url
+        price_per_top_post, monthly_top_posts, signing_at, end_at, contract_file_url
       });
       await renderDetailContracts();
       return true;
@@ -1047,9 +1047,9 @@ async function renderDetailContent() {
   const postsHtml = posts.length
     ? posts.map(p => `
         <div class="content-item">
-          ${platformBadge(p.platform_code, p.platform)}
+          ${platformBadge(p.platform_value, p.platform)}
           <div class="profile-meta">
-            <div class="profile-name">${p.mention_type || p.mention_type_code || '—'}</div>
+            <div class="profile-name">${p.mention_type || p.mention_type_value || '—'}</div>
             <div class="profile-url">${p.published_at ? p.published_at.slice(0, 10) : '—'}</div>
             <div class="profile-stats">${fmt(p.total_views || 0, 'compact')} views · Score: ${Number(p.content_score || 0).toFixed(2)}</div>
           </div>
@@ -1330,10 +1330,10 @@ document.getElementById('btn-add-contract').addEventListener('click', async () =
     if (!status_id) { alert('Estado es obligatorio'); return false; }
     
     const pdfFile = document.getElementById('ac-pdf').files[0];
-    let pdf_url = null;
+    let contract_file_url = null;
     if (pdfFile) {
        const reader = new FileReader();
-       pdf_url = await new Promise(res => { reader.onload = () => res(reader.result); reader.readAsDataURL(pdfFile); });
+       contract_file_url = await new Promise(res => { reader.onload = () => res(reader.result); reader.readAsDataURL(pdfFile); });
     }
 
     const checks = Array.from(document.querySelectorAll('.ac-profile-check:checked'));
@@ -1350,7 +1350,7 @@ document.getElementById('btn-add-contract').addEventListener('click', async () =
         await POST('/contracts', {
           profile_id: pid, status_id, currency_id,
           price_per_standard_post, monthly_standard_posts,
-          price_per_top_post, monthly_top_posts, signing_at, end_at, pdf_url
+          price_per_top_post, monthly_top_posts, signing_at, end_at, contract_file_url
         });
       }
       await renderDetailContracts();
@@ -1425,10 +1425,10 @@ async function renderPosts() {
   const country = document.getElementById('filter-country')?.value;
   const niche = document.getElementById('filter-niche')?.value;
   
-  if (platform) qs.platform_code = platform;
-  if (mention) qs.mention_type_code = mention;
-  if (country) qs.country_code = country;
-  if (niche) qs.niche_code = niche;
+  if (platform) qs.platform_value = platform;
+  if (mention) qs.mention_type_value = mention;
+  if (country) qs.country_value = country;
+  if (niche) qs.niche_value = niche;
 
   const posts = await GET('/posts', Object.keys(qs).length ? qs : null).catch(() => []);
   const filtered = search
@@ -1439,9 +1439,9 @@ async function renderPosts() {
   tbody.innerHTML = filtered.map(p => `
     <tr>
       <td><div class="avatar-cell"><div class="table-avatar">${initials(p.ambassador_name || '?')}</div>${p.ambassador_name || '—'}</div></td>
-      <td>${platformBadge(p.platform_code, p.platform)}</td>
+      <td>${platformBadge(p.platform_value, p.platform)}</td>
       <td>${p.published_at ? p.published_at.slice(0, 10) : '—'}</td>
-      <td><span class="badge badge-country">${p.mention_type || p.mention_type_code || '—'}</span></td>
+      <td><span class="badge badge-country">${p.mention_type || p.mention_type_value || '—'}</span></td>
       <td><strong>${fmt(p.total_views || 0, 'compact')}</strong></td>
       <td>${scoreBar(p.content_score)}</td>
       <td><a href="${p.url}" target="_blank" class="btn-link" style="font-size:12px">Ver ↗</a></td>
@@ -1515,9 +1515,9 @@ async function renderAnalytics() {
   const niche = document.getElementById('filter-niche')?.value;
   const platform = document.getElementById('filter-platform')?.value;
 
-  if (country) qs.country_code = country;
-  if (niche) qs.niche_code = niche;
-  if (platform) qs.platform_code = platform;
+  if (country) qs.country_value = country;
+  if (niche) qs.niche_value = niche;
+  if (platform) qs.platform_value = platform;
 
   const [ambassadors, profiles, posts, contracts, analyses] = await Promise.all([
     GET('/ambassadors', qs),
@@ -1546,12 +1546,12 @@ function buildAnalyticsGroups(ambassadors, profiles, posts, contracts, analyses,
       const pa = analyses.find(a => a.profile_id == p.id) || null;
       
       const realRevenue = profPosts.reduce((s, po) => {
-        return s + calcRealRevenue(po, p.platform_code, amb.country_code, pa);
+        return s + calcRealRevenue(po, p.platform_value, amb.country_value, pa);
       }, 0);
 
       let key;
-      if (groupBy === 'niche') key = p.niche || p.niche_code || '—';
-      else if (groupBy === 'platform') key = p.platform || p.platform_code || '—';
+      if (groupBy === 'niche') key = p.niche || p.niche_value || '—';
+      else if (groupBy === 'platform') key = p.platform || p.platform_value || '—';
       else key = p.handle || p.url || '—';
 
       if (!map[key]) map[key] = { label: key, views: 0, posts: 0, scoreSum: 0, scoreCount: 0, revenue: 0 };
@@ -1569,12 +1569,12 @@ function buildAnalyticsGroups(ambassadors, profiles, posts, contracts, analyses,
       const realRevenue = ambPosts.reduce((s, po) => {
         const prof = profiles.find(pr => pr.id == po.profile_id);
         const pa = analyses.find(an => an.profile_id == po.profile_id) || null;
-        return s + calcRealRevenue(po, prof?.platform_code, a.country_code, pa);
+        return s + calcRealRevenue(po, prof?.platform_value, a.country_value, pa);
       }, 0);
 
       let key;
       if (groupBy === 'country') {
-        key = a.country_code || '—';
+        key = a.country_value || '—';
       } else {
         key = a.first_name + ' ' + (a.last_name || '');
       }
@@ -1686,9 +1686,9 @@ function renderRevenueTable(rows) {
   document.getElementById('revenue-body').innerHTML = (rows || []).map(r => `
     <tr>
       <td>${r.views_date}</td>
-      <td><span class="badge badge-country">${r.country_code || r.country || '—'}</span></td>
-      <td><span class="badge badge-lang" style="background:var(--accent-purple-alpha)">${r.niche_code || r.niche || '—'}</span></td>
-      <td><strong style="color:var(--accent-teal)">${fmt(r.amount, 'currency')}</strong></td>
+      <td><span class="badge badge-country">${r.country_value || r.country || '—'}</span></td>
+      <td><span class="badge badge-lang" style="background:var(--accent-purple-alpha)">${r.niche_value || r.niche || '—'}</span></td>
+      <td><strong style="color:var(--accent-teal)">${fmt(r.new_revenue, 'currency')}</strong></td>
       <td><button class="btn-icon" style="width:auto;padding:4px 10px;font-size:11px" onclick="deleteRevenue(${r.id})">Eliminar</button></td>
     </tr>
   `).join('');
@@ -1698,8 +1698,8 @@ function renderRpuTable(rows) {
   document.getElementById('rpu-body').innerHTML = (rows || []).map(r => `
     <tr>
       <td>${r.views_date}</td>
-      <td><span class="badge badge-country">${r.country_code || '—'}</span></td>
-      <td><span class="badge badge-lang">${r.niche_code || '—'}</span></td>
+      <td><span class="badge badge-country">${r.country_value || '—'}</span></td>
+      <td><span class="badge badge-lang">${r.niche_value || '—'}</span></td>
       <td><strong style="color:var(--accent-purple)">€${Number(r.rpu || 0).toFixed(4)}</strong></td>
       <td>
         <button class="btn-icon" onclick="editRpu(${r.id})" title="Editar RPU">
@@ -1782,21 +1782,21 @@ document.getElementById('btn-import-revenue')?.addEventListener('click', () => {
         const dateStr = parts[0];
         const countryCode = parts[1] || '';
         const currencyCode = parts[2] || '';
-        const amountStr = parts[3] || '';
+        const new_revenueStr = parts[3] || '';
         const nicheCode = parts[4] || '';
 
-        if (!dateStr || !amountStr) continue;
+        if (!dateStr || !new_revenueStr) continue;
 
-        const country = (LISTS.country || []).find(c => c.code && c.code.toUpperCase() === countryCode.toUpperCase());
-        const currency = (LISTS.currency || []).find(c => c.code && c.code.toUpperCase() === currencyCode.toUpperCase());
-        const niche = (LISTS.niche || []).find(n => n.code && n.code.toUpperCase() === nicheCode.toUpperCase());
+        const country = (LISTS.country || []).find(c => c.value && c.value.toUpperCase() === countryCode.toUpperCase());
+        const currency = (LISTS.currency || []).find(c => c.value && c.value.toUpperCase() === currencyCode.toUpperCase());
+        const niche = (LISTS.niche || []).find(n => n.value && n.value.toUpperCase() === nicheCode.toUpperCase());
 
         await POST('/revenues', {
           views_date: dateStr,
           country_id: country ? country.id : null,
           currency_id: currency ? currency.id : null,
           niche_id: niche ? niche.id : null,
-          amount: parseFloat(amountStr) || 0
+          new_revenue: parseFloat(new_revenueStr) || 0
         }).catch(e => console.error('Error importando fila:', e));
 
         imported++;
@@ -1825,7 +1825,7 @@ document.getElementById('btn-add-revenue').addEventListener('click', () => {
       <div class="form-group"><label class="form-label">Nicho</label><select id="rv-niche" class="filter-select" style="width:100%;padding-right:28px"><option value="">— Sin nicho —</option>${listOptions('niche')}</select></div>
       <div class="form-group"><label class="form-label">Moneda</label><select id="rv-currency" class="filter-select" style="width:100%;padding-right:28px">${listOptions('currency')}</select></div>
     </div>
-    <div class="form-group"><label class="form-label">Importe</label><input type="number" id="rv-amount" placeholder="0.00" min="0" step="0.01" /></div>
+    <div class="form-group"><label class="form-label">Importe</label><input type="number" id="rv-new_revenue" placeholder="0.00" min="0" step="0.01" /></div>
   `, async () => {
     try {
       await POST('/revenues', {
@@ -1833,7 +1833,7 @@ document.getElementById('btn-add-revenue').addEventListener('click', () => {
         country_id: parseInt(document.getElementById('rv-country').value),
         niche_id: parseInt(document.getElementById('rv-niche').value) || null,
         currency_id: parseInt(document.getElementById('rv-currency').value) || null,
-        amount: parseFloat(document.getElementById('rv-amount').value) || 0,
+        new_revenue: parseFloat(document.getElementById('rv-new_revenue').value) || 0,
       });
       await renderRevenue();
       return true;
@@ -1890,7 +1890,7 @@ function renderSettings() {
     const items = LISTS[key] || [];
     ul.innerHTML = items.map(lv => `
       <li>
-        <span>${lv.value}${lv.code ? ` <small style="color:var(--text-tertiary)">(${lv.code})</small>` : ''}</span>
+        <span>${lv.value}${lv.value ? ` <small style="color:var(--text-tertiary)">(${lv.value})</small>` : ''}</span>
         <button onclick="deleteListValue(${lv.id}, '${key}')">Eliminar</button>
       </li>
     `).join('') || '<li style="color:var(--text-tertiary);font-size:12px;padding:8px 0">Sin valores</li>';
