@@ -366,6 +366,21 @@ async function renderDbTable(tableName) {
             let displayVal;
             if (val === null || val === undefined) {
               displayVal = '<span style="color:var(--text-tertiary)">—</span>';
+            } else if (col === 'contract_file_url' && typeof val === 'string' && val.length > 0) {
+              // Puede ser URL http o base64
+              const isBase64 = val.startsWith('data:');
+              displayVal = `
+                <div style="display:flex;gap:6px;align-items:center">
+                  <a href="${val}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;color:var(--accent-teal);font-size:12px;font-weight:600;white-space:nowrap">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    Ver
+                  </a>
+                  <a href="${val}" download="contrato.pdf" style="display:inline-flex;align-items:center;gap:4px;color:var(--accent-purple);font-size:12px;font-weight:600;white-space:nowrap">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Descargar
+                  </a>
+                  ${!isBase64 ? `<span style="font-size:11px;color:var(--text-tertiary);white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis">${val}</span>` : '<span style="font-size:11px;color:var(--text-tertiary)">[PDF]</span>'}
+                </div>`;
             } else if (typeof val === 'string' && (val.startsWith('http://') || val.startsWith('https://'))) {
               displayVal = `<a href="${val}" target="_blank" style="color:var(--accent-purple);word-break:break-all">${val}</a>`;
             } else if (typeof val === 'string' && val.length > 60) {
