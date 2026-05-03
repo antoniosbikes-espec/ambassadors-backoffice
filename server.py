@@ -495,8 +495,17 @@ def init_db():
                     if col not in ['primary', 'foreign', 'unique', 'check', 'index', 'constraint']:
                         new_cols.append(col)
 
-            # Si ya está bien, saltar
-            if set(old_cols) == set(new_cols):
+            # Comprobar si realmente necesitamos migrar (si sobran columnas o faltan)
+            # También comprobamos si el mapeo implica un cambio
+            needs_migration = False
+            if set(old_cols) != set(new_cols):
+                needs_migration = True
+            if mapping:
+                for nc, sc in mapping.items():
+                    if nc in new_cols and sc in old_cols and nc != sc:
+                        needs_migration = True
+            
+            if not needs_migration:
                 return
 
             print(f"[DB] Migrando {table_name}...")
@@ -517,11 +526,14 @@ def init_db():
                 conn.execute(sql)
             
             conn.execute(f"DROP TABLE {table_name}_old")
-            conn.commit()
             print(f"[DB] {table_name} migrado con éxito.")
         except Exception as e:
             print(f"[DB] Error en {table_name}: {e}")
-            conn.execute(f"DROP TABLE IF EXISTS {table_name}_old")
+            # Intentar revertir si es posible
+            try:
+                conn.execute(f"DROP TABLE IF EXISTS {table_name}")
+                conn.execute(f"ALTER TABLE {table_name}_old RENAME TO {table_name}")
+            except: pass
 
     try:
         conn.execute("PRAGMA foreign_keys = OFF")
@@ -783,7 +795,7 @@ class Handler(BaseHTTPRequestHandler):
             # ── /api/tables ────────────────────────────
             if path == '/api/tables' and method == 'GET':
                 # Listar todas las tablas de usuario
-                tables = self.db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '%_old' AND name NOT LIKE '%_repair'").fetchall()
+                tables = self.db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '%_old' AND name NOT LIKE '%_repair' AND name NOT IN ('users', 'sessions')").fetchall()
                 return self.send_json([t['name'] for t in tables])
 
             m_table = re.match(r'^/api/tables/([^/]+)$', path)
