@@ -46,19 +46,14 @@ USER_CREDENTIALS = {APP_USERNAME: APP_PASSWORD}
 
 # ── CORS: restringir al dominio de producción ─────────────────
 # Permite también localhost para desarrollo local
-ALLOWED_ORIGINS = [
-    'https://ambasadors.netlify.app',
-    'http://localhost:3000',
-    'http://localhost:8080',
-    'http://127.0.0.1:5500',  # Live Server de VS Code
-    'null',                    # Apertura directa de index.html local
-]
+ALLOWED_ORIGINS = ['*']
 
 def get_cors_origin(request_origin):
-    """Devuelve el origen permitido o el primero de la lista como fallback."""
+    """Devuelve el origen permitido o '*' si está habilitado."""
+    if '*' in ALLOWED_ORIGINS:
+        return '*'
     if request_origin and request_origin in ALLOWED_ORIGINS:
         return request_origin
-    # En desarrollo local sin Origin header, devolver el primero
     return ALLOWED_ORIGINS[0]
 
 # ─────────────────────────────────────────────────────────────
@@ -994,7 +989,9 @@ class Handler(BaseHTTPRequestHandler):
             sql += ' WHERE ' + ' AND '.join(where)
         sql += ' ORDER BY a.first_name'
         rows = self.db.execute(sql, params).fetchall()
-        self.send_json(rows_to_list(rows))
+        data = rows_to_list(rows)
+        print(f"✅ Ambassadors found: {len(data)}")
+        self.send_json(data)
 
     def get_ambassador(self, aid):
         row = self.db.execute("""
