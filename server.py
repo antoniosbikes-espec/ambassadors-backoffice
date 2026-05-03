@@ -533,6 +533,20 @@ def init_db():
         conn.execute("PRAGMA foreign_keys = ON")
 
     conn.close()
+    
+    # DIAGNÓSTICO DE FILAS
+    conn = get_db()
+    try:
+        tables = ['ambassadors', 'profiles', 'contracts', 'posts', 'revenues', 'list_values']
+        counts = {t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in tables}
+        print(f"[DB] Diagnóstico de datos: {counts}")
+        if counts['ambassadors'] == 0:
+            print("[DB] ADVERTENCIA: La tabla de embajadores está VACÍA.")
+    except Exception as e:
+        print(f"[DB] Error en diagnóstico: {e}")
+    finally:
+        conn.close()
+
     print(f"[DB] Initialised at {DB_PATH}")
 
 def rows_to_list(rows):
