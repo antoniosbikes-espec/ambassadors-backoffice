@@ -498,6 +498,10 @@ def init_db():
 
     try:
         conn.execute("PRAGMA foreign_keys = OFF")
+        # Limpieza de posibles tablas temporales de migraciones fallidas anteriores
+        conn.execute("DROP TABLE IF EXISTS ambassadors_old")
+        conn.execute("DROP TABLE IF EXISTS lists_old")
+        conn.execute("DROP TABLE IF EXISTS list_values_old")
         
         # Asegurar tablas básicas
         conn.executescript(SCHEMA)
@@ -1699,45 +1703,8 @@ class Handler(BaseHTTPRequestHandler):
 # ─────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     init_db()
-    
-    # MIGRACIONES DE EMERGENCIA PARA ASEGURAR QUE LOS CAMBIOS SE APLIQUEN EN RAILWAY
-    conn = get_db()
-    try:
-        # 1. Renombrar tabla post_views_history a daily_views si aún existe la vieja
-        exists_old_pvh = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='post_views_history'").fetchone()
-        exists_new_dv = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='daily_views'").fetchone()
-        if exists_old_pvh and not exists_new_dv:
-            conn.execute("ALTER TABLE post_views_history RENAME TO daily_views")
-            print("[DB] Tabla post_views_history renombrada a daily_views")
-        
-        # 2. Asegurar columnas en revenues
-        sql_rev = conn.execute("SELECT sql FROM sqlite_master WHERE name='revenues'").fetchone()
-        if sql_rev and 'new_revenue' not in sql_rev[0]:
-            conn.execute("ALTER TABLE revenues ADD COLUMN new_revenue REAL DEFAULT 0")
-            print("[DB] Columna 'new_revenue' añadida a revenues")
-            if 'amount' in sql_rev[0]:
-                conn.execute("UPDATE revenues SET new_revenue = amount")
-                print("[DB] Datos migrados de amount a new_revenue")
-        
-        # 3. Asegurar columnas en contracts
-        sql_con = conn.execute("SELECT sql FROM sqlite_master WHERE name='contracts'").fetchone()
-        if sql_con:
-            if 'contract_file_url' not in sql_con[0]:
-                conn.execute("ALTER TABLE contracts ADD COLUMN contract_file_url TEXT")
-                print("[DB] Columna 'contract_file_url' añadida")
-            if 'notes' not in sql_con[0]:
-                conn.execute("ALTER TABLE contracts ADD COLUMN notes TEXT")
-                print("[DB] Columna 'notes' añadida a contracts")
-            if 'pdf_url' in sql_con[0] and 'contract_file_url' in sql_con[0]:
-                conn.execute("UPDATE contracts SET contract_file_url = pdf_url WHERE contract_file_url IS NULL")
 
-        conn.commit()
-    except Exception as e:
-        print(f"[DB] Error en migraciones de emergencia: {e}")
-    finally:
-        conn.close()
-
-    port = int(os.environ.get("PORT", 8000))
+    port = int(os.environ.get("PORT", 8080))
     print(f"🚀 Server running on port {port}")
     server = ThreadedHTTPServer(("0.0.0.0", port), Handler)
     server.serve_forever()
