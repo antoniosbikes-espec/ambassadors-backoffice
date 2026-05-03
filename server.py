@@ -5,6 +5,8 @@ Python 3 + SQLite (stdlib only, no pip required)
 """
 
 import sqlite3, json, os, sys, re, time, urllib.request
+VERSION = "1.0.5 - Clean Migrations"
+print(f"--- SERVER VERSION: {VERSION} ---")
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
 from datetime import datetime, timezone
