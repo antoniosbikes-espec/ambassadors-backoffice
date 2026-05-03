@@ -520,6 +520,7 @@ def init_db():
 
         # SEEDS
         conn.executescript(SEEDS)
+        conn.executescript(DEMO_DATA)
         
         conn.execute("PRAGMA foreign_keys = ON")
         conn.commit()
