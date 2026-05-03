@@ -605,6 +605,24 @@ textarea:focus { border-color: var(--accent-purple); box-shadow: 0 0 0 2px rgba(
   margin-bottom: 24px;
 }
 
+/* El scroll horizontal aplica al wrapper, no al card */
+.table-scroll {
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Para la tabla del explorador, evitar que se compriman las columnas */
+#db-data-table {
+  width: max-content;
+  min-width: 100%;
+}
+
+#db-data-table thead th,
+#db-data-table tbody td {
+  white-space: nowrap;
+}
+
 .table-header {
   display: flex;
   align-items: center;
