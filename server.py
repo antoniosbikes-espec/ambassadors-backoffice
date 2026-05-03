@@ -471,73 +471,132 @@ def get_db():
 def init_db():
     conn = get_db()
     
-    def reconstruct_table(table_name, create_sql):
-        """Reconstruye una tabla para eliminar columnas sobrantes o cambiar tipos."""
+    def safe_reconstruct(table_name, create_sql, mapping=None):
+        """
+        Reconstruye una tabla de forma segura. 
+        mapping: { 'col_nueva': 'col_vieja' }
+        """
         try:
-            # Obtener columnas actuales
             cursor = conn.execute(f"PRAGMA table_info({table_name})")
-            current_cols = [row[1] for row in cursor.fetchall()]
-            if not current_cols:
-                # La tabla no existe, se crea normalmente
+            old_cols = [row[1] for row in cursor.fetchall()]
+            if not old_cols:
                 conn.execute(create_sql)
                 return
 
-            # Extraer nombres de columnas del nuevo SQL (aproximado)
-            # Buscamos patrones como "col_name  TYPE" o "col_name TYPE"
+            # Extraer columnas nuevas del SQL
             import re
             new_cols = []
-            lines = create_sql.split('\n')
-            for line in lines:
+            for line in create_sql.split('\n'):
                 line = line.strip()
-                if line.startswith('CREATE') or line.startswith(')') or not line: continue
-                match = re.match(r'^([a-zA-Z0-9_]+)\s+', line)
-                if match:
-                    col = match.group(1).lower()
+                if line.upper().startswith('CREATE') or line.startswith(')') or not line: continue
+                m = re.match(r'^([a-zA-Z0-9_]+)', line)
+                if m:
+                    col = m.group(1).lower()
                     if col not in ['primary', 'foreign', 'unique', 'check', 'index', 'constraint']:
                         new_cols.append(col)
-            
-            # Si todas las columnas nuevas existen y no sobran (o sobran pero queremos quitarlas)
-            # Comparamos sets para ver si hay que borrar alguna
-            if set(current_cols) == set(new_cols):
+
+            # Si ya está bien, saltar
+            if set(old_cols) == set(new_cols):
                 return
 
-            print(f"[DB] Reconstruyendo tabla {table_name} para limpiar columnas...")
+            print(f"[DB] Migrando {table_name}...")
             conn.execute(f"ALTER TABLE {table_name} RENAME TO {table_name}_old")
             conn.execute(create_sql)
             
-            # Intersección de columnas para copiar datos
-            common_cols = [c for c in current_cols if c in new_cols]
-            col_list = ", ".join(common_cols)
-            if col_list:
-                conn.execute(f"INSERT INTO {table_name} ({col_list}) SELECT {col_list} FROM {table_name}_old")
+            # Construir el INSERT
+            dest_cols = []
+            source_cols = []
+            for nc in new_cols:
+                sc = mapping.get(nc, nc) if mapping else nc
+                if sc in old_cols:
+                    dest_cols.append(nc)
+                    source_cols.append(sc)
+            
+            if dest_cols:
+                sql = f"INSERT INTO {table_name} ({', '.join(dest_cols)}) SELECT {', '.join(source_cols)} FROM {table_name}_old"
+                conn.execute(sql)
             
             conn.execute(f"DROP TABLE {table_name}_old")
             conn.commit()
+            print(f"[DB] {table_name} migrado con éxito.")
         except Exception as e:
-            print(f"[DB] Error reconstruyendo {table_name}: {e}")
+            print(f"[DB] Error en {table_name}: {e}")
             conn.execute(f"DROP TABLE IF EXISTS {table_name}_old")
 
     try:
         conn.execute("PRAGMA foreign_keys = OFF")
         
-        # Lista de tablas y su SQL de creación (extraído del SCHEMA)
-        # Nota: He quitado las comas finales y limpiado un poco para el regex
-        reconstruct_table('lists', "CREATE TABLE lists (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE)")
-        reconstruct_table('list_values', "CREATE TABLE list_values (id INTEGER PRIMARY KEY AUTOINCREMENT, list_id INTEGER NOT NULL REFERENCES lists(id), value TEXT NOT NULL, is_active INTEGER NOT NULL DEFAULT 1, UNIQUE(list_id, value))")
-        reconstruct_table('ambassadors', "CREATE TABLE ambassadors (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL UNIQUE, first_name TEXT NOT NULL, last_name TEXT, primary_language_id INTEGER REFERENCES list_values(id), country_id INTEGER REFERENCES list_values(id))")
-        reconstruct_table('profiles', "CREATE TABLE profiles (id INTEGER PRIMARY KEY AUTOINCREMENT, ambassador_id INTEGER NOT NULL REFERENCES ambassadors(id), platform_id INTEGER NOT NULL REFERENCES list_values(id), handle TEXT, url TEXT NOT NULL, niche_id INTEGER REFERENCES list_values(id))")
-        reconstruct_table('posts', "CREATE TABLE posts (id INTEGER PRIMARY KEY AUTOINCREMENT, profile_id INTEGER NOT NULL REFERENCES profiles(id), url TEXT NOT NULL UNIQUE, mention_type_id INTEGER REFERENCES list_values(id), mention_offset INTEGER NOT NULL DEFAULT 0, content_score REAL CHECK(content_score BETWEEN 0 AND 1), published_at TEXT)")
-        reconstruct_table('revenues', "CREATE TABLE revenues (id INTEGER PRIMARY KEY AUTOINCREMENT, views_date TEXT NOT NULL, country_id INTEGER NOT NULL REFERENCES list_values(id), currency_id INTEGER REFERENCES list_values(id), new_revenue REAL NOT NULL DEFAULT 0)")
-        reconstruct_table('rpus', "CREATE TABLE rpus (id INTEGER PRIMARY KEY AUTOINCREMENT, views_date TEXT NOT NULL, country_id INTEGER NOT NULL REFERENCES list_values(id), niche_id INTEGER NOT NULL REFERENCES list_values(id), rpu REAL NOT NULL DEFAULT 0, UNIQUE(views_date, country_id, niche_id))")
-        
-        # Tablas que solo necesitan CREATE IF NOT EXISTS (sin borrar datos antiguos si es posible)
+        # 1. Ambassadors (Restaurar created_at, quitar notes)
+        safe_reconstruct('ambassadors', """
+            CREATE TABLE ambassadors (
+                id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+                email                TEXT    NOT NULL UNIQUE,
+                first_name           TEXT    NOT NULL,
+                last_name            TEXT,
+                primary_language_id  INTEGER REFERENCES list_values(id),
+                country_id           INTEGER REFERENCES list_values(id),
+                created_at           TEXT    NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+
+        # 2. Lists (Quitar created_at)
+        safe_reconstruct('lists', "CREATE TABLE lists (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE)")
+
+        # 3. List Values (Quitar code y created_at)
+        safe_reconstruct('list_values', """
+            CREATE TABLE list_values (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                list_id    INTEGER NOT NULL REFERENCES lists(id),
+                value      TEXT    NOT NULL,
+                is_active  INTEGER NOT NULL DEFAULT 1,
+                UNIQUE(list_id, value)
+            )
+        """)
+
+        # 4. Revenues (Quitar niche_id, created_at, amount -> new_revenue)
+        safe_reconstruct('revenues', """
+            CREATE TABLE revenues (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                views_date    TEXT    NOT NULL,
+                country_id    INTEGER NOT NULL REFERENCES list_values(id),
+                currency_id   INTEGER REFERENCES list_values(id),
+                new_revenue   REAL    NOT NULL DEFAULT 0
+            )
+        """, mapping={'new_revenue': 'amount'})
+
+        # 5. Posts (Quitar created_at)
+        safe_reconstruct('posts', """
+            CREATE TABLE posts (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                profile_id       INTEGER NOT NULL REFERENCES profiles(id),
+                url              TEXT    NOT NULL UNIQUE,
+                mention_type_id  INTEGER REFERENCES list_values(id),
+                mention_offset   INTEGER NOT NULL DEFAULT 0,
+                content_score    REAL    CHECK(content_score BETWEEN 0 AND 1),
+                published_at     TEXT
+            )
+        """)
+
+        # 6. RPUs (Quitar created_at)
+        safe_reconstruct('rpus', """
+            CREATE TABLE rpus (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                views_date  TEXT    NOT NULL,
+                country_id  INTEGER NOT NULL REFERENCES list_values(id),
+                niche_id    INTEGER NOT NULL REFERENCES list_values(id),
+                rpu         REAL    NOT NULL DEFAULT 0,
+                UNIQUE(views_date, country_id, niche_id)
+            )
+        """)
+
+        # Asegurar SCHEMA y SEEDS
         conn.executescript(SCHEMA)
         conn.executescript(SEEDS)
         
         conn.execute("PRAGMA foreign_keys = ON")
         conn.commit()
     except Exception as e:
-        print(f"[DB] Error en init_db: {e}")
+        print(f"[DB] Error crítico init_db: {e}")
         conn.execute("PRAGMA foreign_keys = ON")
 
     conn.close()
