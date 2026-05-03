@@ -241,51 +241,51 @@ INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'Libra esterlina'   F
 
 DEMO_DATA = """
 -- Demo ambassadors (only if table is empty)
-INSERT OR IGNORE INTO ambassadors(email,first_name,last_name,primary_language_id,country_id,created_at) VALUES(
+INSERT OR REPLACE INTO ambassadors(email,first_name,last_name,primary_language_id,country_id,created_at) VALUES(
   'carlos@ejemplo.com','Carlos','Martínez',
-  (SELECT id FROM list_values WHERE value='España' AND list_id=(SELECT id FROM lists WHERE name='language')),
+  (SELECT id FROM list_values WHERE value='Español' AND list_id=(SELECT id FROM lists WHERE name='language')),
   (SELECT id FROM list_values WHERE value='España' AND list_id=(SELECT id FROM lists WHERE name='country')),
   '2024-01-10 00:00:00'
 );
-INSERT OR IGNORE INTO ambassadors(email,first_name,last_name,primary_language_id,country_id,created_at) VALUES(
+INSERT OR REPLACE INTO ambassadors(email,first_name,last_name,primary_language_id,country_id,created_at) VALUES(
   'laura@ejemplo.com','Laura','Gómez',
-  (SELECT id FROM list_values WHERE value='España' AND list_id=(SELECT id FROM lists WHERE name='language')),
+  (SELECT id FROM list_values WHERE value='Español' AND list_id=(SELECT id FROM lists WHERE name='language')),
   (SELECT id FROM list_values WHERE value='España' AND list_id=(SELECT id FROM lists WHERE name='country')),
   '2024-02-14 00:00:00'
 );
-INSERT OR IGNORE INTO ambassadors(email,first_name,last_name,primary_language_id,country_id,created_at) VALUES(
+INSERT OR REPLACE INTO ambassadors(email,first_name,last_name,primary_language_id,country_id,created_at) VALUES(
   'miguel@ejemplo.com','Miguel','Torres',
-  (SELECT id FROM list_values WHERE value='España' AND list_id=(SELECT id FROM lists WHERE name='language')),
+  (SELECT id FROM list_values WHERE value='Español' AND list_id=(SELECT id FROM lists WHERE name='language')),
   (SELECT id FROM list_values WHERE value='México' AND list_id=(SELECT id FROM lists WHERE name='country')),
   '2024-01-28 00:00:00'
 );
-INSERT OR IGNORE INTO ambassadors(email,first_name,last_name,primary_language_id,country_id,created_at) VALUES(
+INSERT OR REPLACE INTO ambassadors(email,first_name,last_name,primary_language_id,country_id,created_at) VALUES(
   'sofia@ejemplo.com','Sofia','Ruiz',
-  (SELECT id FROM list_values WHERE value='España' AND list_id=(SELECT id FROM lists WHERE name='language')),
+  (SELECT id FROM list_values WHERE value='Español' AND list_id=(SELECT id FROM lists WHERE name='language')),
   (SELECT id FROM list_values WHERE value='Argentina' AND list_id=(SELECT id FROM lists WHERE name='country')),
   '2024-03-01 00:00:00'
 );
-INSERT OR IGNORE INTO ambassadors(email,first_name,last_name,primary_language_id,country_id,created_at) VALUES(
+INSERT OR REPLACE INTO ambassadors(email,first_name,last_name,primary_language_id,country_id,created_at) VALUES(
   'james@ejemplo.com','James','Wilson',
   (SELECT id FROM list_values WHERE value='Inglés' AND list_id=(SELECT id FROM lists WHERE name='language')),
   (SELECT id FROM list_values WHERE value='Estados Unidos' AND list_id=(SELECT id FROM lists WHERE name='country')),
   '2024-03-15 00:00:00'
 );
-INSERT OR IGNORE INTO ambassadors(email,first_name,last_name,primary_language_id,country_id,created_at) VALUES(
+INSERT OR REPLACE INTO ambassadors(email,first_name,last_name,primary_language_id,country_id,created_at) VALUES(
   'emma@ejemplo.com','Emma','Johnson',
   (SELECT id FROM list_values WHERE value='Inglés' AND list_id=(SELECT id FROM lists WHERE name='language')),
   (SELECT id FROM list_values WHERE value='Reino Unido' AND list_id=(SELECT id FROM lists WHERE name='country')),
   '2024-02-20 00:00:00'
 );
-INSERT OR IGNORE INTO ambassadors(email,first_name,last_name,primary_language_id,country_id,created_at) VALUES(
+INSERT OR REPLACE INTO ambassadors(email,first_name,last_name,primary_language_id,country_id,created_at) VALUES(
   'pablo@ejemplo.com','Pablo','Díaz',
-  (SELECT id FROM list_values WHERE value='España' AND list_id=(SELECT id FROM lists WHERE name='language')),
+  (SELECT id FROM list_values WHERE value='Español' AND list_id=(SELECT id FROM lists WHERE name='language')),
   (SELECT id FROM list_values WHERE value='España' AND list_id=(SELECT id FROM lists WHERE name='country')),
   '2024-01-05 00:00:00'
 );
-INSERT OR IGNORE INTO ambassadors(email,first_name,last_name,primary_language_id,country_id,created_at) VALUES(
+INSERT OR REPLACE INTO ambassadors(email,first_name,last_name,primary_language_id,country_id,created_at) VALUES(
   'ana@ejemplo.com','Ana','López',
-  (SELECT id FROM list_values WHERE value='España' AND list_id=(SELECT id FROM lists WHERE name='language')),
+  (SELECT id FROM list_values WHERE value='Español' AND list_id=(SELECT id FROM lists WHERE name='language')),
   (SELECT id FROM list_values WHERE value='México' AND list_id=(SELECT id FROM lists WHERE name='country')),
   '2023-12-01 00:00:00'
 );
