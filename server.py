@@ -371,25 +371,25 @@ INSERT OR IGNORE INTO contracts(profile_id,status_id,currency_id,price_per_stand
 INSERT OR IGNORE INTO posts(profile_id,url,mention_type_id,mention_offset,content_score,published_at) VALUES(
   (SELECT id FROM profiles WHERE handle='@carlosfitness'),
   'https://youtu.be/abc001',
-  (SELECT id FROM list_values WHERE code='dedicated' AND list_id=(SELECT id FROM lists WHERE name='mention_type')),
+  (SELECT id FROM list_values WHERE value='M (Mention)' AND list_id=(SELECT id FROM lists WHERE name='mention_type')),
   30, 0.92,'2024-03-15 00:00:00'
 );
 INSERT OR IGNORE INTO posts(profile_id,url,mention_type_id,mention_offset,content_score,published_at) VALUES(
   (SELECT id FROM profiles WHERE handle='@laurabeauty'),
   'https://youtu.be/abc002',
-  (SELECT id FROM list_values WHERE code='integrated' AND list_id=(SELECT id FROM lists WHERE name='mention_type')),
+  (SELECT id FROM list_values WHERE value='OM (Organic Mention)' AND list_id=(SELECT id FROM lists WHERE name='mention_type')),
   120,0.88,'2024-03-20 00:00:00'
 );
 INSERT OR IGNORE INTO posts(profile_id,url,mention_type_id,mention_offset,content_score,published_at) VALUES(
   (SELECT id FROM profiles WHERE handle='@jameswilsontravel'),
   'https://youtu.be/abc003',
-  (SELECT id FROM list_values WHERE code='dedicated' AND list_id=(SELECT id FROM lists WHERE name='mention_type')),
+  (SELECT id FROM list_values WHERE value='M (Mention)' AND list_id=(SELECT id FROM lists WHERE name='mention_type')),
   0,0.91,'2024-03-18 00:00:00'
 );
 INSERT OR IGNORE INTO posts(profile_id,url,mention_type_id,mention_offset,content_score,published_at) VALUES(
   (SELECT id FROM profiles WHERE handle='@emmafooduk'),
   'https://youtu.be/abc004',
-  (SELECT id FROM list_values WHERE code='integrated' AND list_id=(SELECT id FROM lists WHERE name='mention_type')),
+  (SELECT id FROM list_values WHERE value='OM (Organic Mention)' AND list_id=(SELECT id FROM lists WHERE name='mention_type')),
   60,0.75,'2024-03-22 00:00:00'
 );
 
@@ -937,8 +937,8 @@ class Handler(BaseHTTPRequestHandler):
     def create_list_value(self):
         body = self.read_body()
         cur = self.db.execute(
-            "INSERT INTO list_values(list_id,value,code) VALUES(?,?,?)",
-            (body.get('list_id'), body.get('value'), body.get('code'))
+            "INSERT INTO list_values(list_id,value) VALUES(?,?)",
+            (body.get('list_id'), body.get('value'))
         )
         self.db.commit()
         row = self.db.execute("SELECT lv.*,l.name as list_name FROM list_values lv JOIN lists l ON l.id=lv.list_id WHERE lv.id=?", (cur.lastrowid,)).fetchone()
@@ -946,8 +946,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def update_list_value(self, lv_id):
         body = self.read_body()
-        self.db.execute("UPDATE list_values SET value=?,code=?,is_active=? WHERE id=?",
-                   (body.get('value'), body.get('code'), body.get('is_active', 1), lv_id))
+        self.db.execute("UPDATE list_values SET value=?,is_active=? WHERE id=?",
+                   (body.get('value'), body.get('is_active', 1), lv_id))
         self.db.commit()
         row = self.db.execute("SELECT lv.*,l.name as list_name FROM list_values lv JOIN lists l ON l.id=lv.list_id WHERE lv.id=?", (lv_id,)).fetchone()
         self.send_json(dict(row))
@@ -1092,7 +1092,7 @@ class Handler(BaseHTTPRequestHandler):
         if qs.get('niche_value'):
             where.append('lv_niche.value=?'); params.append(qs['niche_value'][0])
         if qs.get('country_value'):
-            where.append('a.country_id = (SELECT id FROM list_values WHERE UPPER(code)=UPPER(?))')
+            where.append('a.country_id = (SELECT id FROM list_values WHERE UPPER(value)=UPPER(?))')
             params.append(qs['country_value'][0])
         if where:
             sql += ' WHERE ' + ' AND '.join(where)
@@ -1208,10 +1208,10 @@ class Handler(BaseHTTPRequestHandler):
         if qs.get('status_value'):
             where.append('lv_st.value=?'); params.append(qs['status_value'][0])
         if qs.get('country_value'):
-            where.append('a.country_id = (SELECT id FROM list_values WHERE UPPER(code)=UPPER(?))')
+            where.append('a.country_id = (SELECT id FROM list_values WHERE UPPER(value)=UPPER(?))')
             params.append(qs['country_value'][0])
         if qs.get('niche_value'):
-            where.append('p.niche_id = (SELECT id FROM list_values WHERE UPPER(code)=UPPER(?))')
+            where.append('p.niche_id = (SELECT id FROM list_values WHERE UPPER(value)=UPPER(?))')
             params.append(qs['niche_value'][0])
         if qs.get('platform_value'):
             where.append('lv_plat.value=?'); params.append(qs['platform_value'][0])
@@ -1301,10 +1301,10 @@ class Handler(BaseHTTPRequestHandler):
         if qs.get('mention_type_value'):
             where.append('lv_mt.value=?'); params.append(qs['mention_type_value'][0])
         if qs.get('country_value'):
-            where.append('a.country_id = (SELECT id FROM list_values WHERE UPPER(code)=UPPER(?))')
+            where.append('a.country_id = (SELECT id FROM list_values WHERE UPPER(value)=UPPER(?))')
             params.append(qs['country_value'][0])
         if qs.get('niche_value'):
-            where.append('p.niche_id = (SELECT id FROM list_values WHERE UPPER(code)=UPPER(?))')
+            where.append('p.niche_id = (SELECT id FROM list_values WHERE UPPER(value)=UPPER(?))')
             params.append(qs['niche_value'][0])
         if where:
             sql += ' WHERE ' + ' AND '.join(where)
@@ -1461,13 +1461,13 @@ class Handler(BaseHTTPRequestHandler):
         if qs:
             print(f"📊 Dashboard Request Params: {qs}", flush=True)
             if qs.get('country_value') and qs['country_value'][0]:
-                where_parts.append('a.country_id = (SELECT id FROM list_values WHERE UPPER(code)=UPPER(?))')
+                where_parts.append('a.country_id = (SELECT id FROM list_values WHERE UPPER(value)=UPPER(?))')
                 params.append(qs['country_value'][0])
             if qs.get('niche_value') and qs['niche_value'][0]:
-                where_parts.append('p.niche_id = (SELECT id FROM list_values WHERE UPPER(code)=UPPER(?))')
+                where_parts.append('p.niche_id = (SELECT id FROM list_values WHERE UPPER(value)=UPPER(?))')
                 params.append(qs['niche_value'][0])
             if qs.get('platform_value') and qs['platform_value'][0]:
-                where_parts.append('p.platform_id = (SELECT id FROM list_values WHERE UPPER(code)=UPPER(?))')
+                where_parts.append('p.platform_id = (SELECT id FROM list_values WHERE UPPER(value)=UPPER(?))')
                 params.append(qs['platform_value'][0])
             if qs.get('ambassador_id'):
                 where_parts.append('a.id = ?')
