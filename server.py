@@ -1418,7 +1418,7 @@ class Handler(BaseHTTPRequestHandler):
         total_profiles    = res[1]
         
         # Contratos firmados
-        w_sql_s, _ = build_where(["lv_s.value='signed'"])
+        w_sql_s, _ = build_where(["lv_s.value='Firmado'"])
         signed_contracts = self.db.execute(f"""
             SELECT COUNT(DISTINCT c.id) {base_from}
             JOIN contracts c ON c.profile_id = p.id
@@ -1427,7 +1427,7 @@ class Handler(BaseHTTPRequestHandler):
         """, params).fetchone()[0] or 0
 
         # Revenue Esperado (NUEVA FÓRMULA PERFORMANCE-BASED)
-        w_sql_s, _ = build_where(["lv_s.value='signed'"])
+        w_sql_s, _ = build_where(["lv_s.value='Firmado'"])
         rows_perf = self.db.execute(f"""
             SELECT 
                 c.monthly_standard_posts, c.monthly_top_posts,
@@ -1447,13 +1447,12 @@ class Handler(BaseHTTPRequestHandler):
         
         # Multiplicadores oficiales (RPU/1.50)
         COUNTRY_RPM_MULT = {
-            'MX': 1.00, 'ES': 1.33, 'CO': 0.53, 'CL': 0.53, 'BR': 0.33,
-            'DE': 3.00, 'FR': 1.47, 'IT': 2.67, 'PT': 0.72, 'UK': 3.00,
-            'US': 5.00, 'AU': 3.67, 'CA': 3.67, 'AR': 0.40, 'CO': 0.53,
-            'FR': 1.47, 'IE': 3.00 # Irlanda -> 3.00 (similar UK)
+            'MÉXICO': 1.00, 'ESPAÑA': 1.33, 'COLOMBIA': 0.53, 'CHILE': 0.53, 'BRASIL': 0.33,
+            'ALEMANIA': 3.00, 'FRANCIA': 1.47, 'ITALIA': 2.67, 'PORTUGUÉS': 0.72, 'REINO UNIDO': 3.00,
+            'ESTADOS UNIDOS': 5.00, 'AUSTRALIA': 3.67, 'CANADÁ': 3.67, 'ARGENTINA': 0.40
         }
         # Multiplicador Latam por defecto (0.40)
-        LATAM_CODES = ['AR', 'CO', 'CL', 'PE', 'EC', 'VE', 'UY', 'PY', 'BO', 'GT', 'HN', 'SV', 'NI', 'CR', 'PA', 'DO', 'PR']
+        LATAM_NAMES = ['ARGENTINA', 'COLOMBIA', 'CHILE', 'PERÚ', 'ECUADOR', 'VENEZUELA', 'URUGUAY', 'PARAGUAY', 'BOLIVIA', 'GUATEMALA', 'HONDURAS', 'EL SALVADOR', 'NICARAGUA', 'COSTA RICA', 'PANAMÁ', 'REPÚBLICA DOMINICANA', 'PUERTO RICO']
         
         expected_revenue = 0
         for r in rows_perf:
@@ -1464,7 +1463,7 @@ class Handler(BaseHTTPRequestHandler):
             c_code = (r['country_value'] or '').upper()
             country_mult = COUNTRY_RPM_MULT.get(c_code)
             if country_mult is None:
-                if c_code in LATAM_CODES: country_mult = 0.40
+                if c_code in LATAM_NAMES: country_mult = 0.40
                 else: country_mult = 0.12 # Developing / Default
             
             # 2. Cache Multiplier — ENUM: LOW=0.8, MID=1.0, HIGH=1.2 o número
@@ -1519,7 +1518,7 @@ class Handler(BaseHTTPRequestHandler):
             LEFT JOIN list_values lv_mt ON lv_mt.id = po.mention_type_id
             LEFT JOIN profile_analyses pa ON pa.id = 
                 (SELECT id FROM profile_analyses WHERE profile_id=p.id ORDER BY created_at DESC LIMIT 1)
-            {w_sql_real} AND lv_s.value='signed'
+            {w_sql_real} AND lv_s.value='Firmado'
             GROUP BY po.id
         """, params + [f'-{days} days']).fetchall()
 
@@ -1552,7 +1551,7 @@ class Handler(BaseHTTPRequestHandler):
             mt_code = (r['mention_type_value'] or '').lower()
             
             if p_code == 'youtube':
-                if mt_code == 'om_mention':
+                if 'organic' in mt_code or 'om' in mt_code:
                     real_revenue += base_val_post * 4.0
                 else:
                     real_revenue += base_val_post * 2.5
@@ -1630,79 +1629,46 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     init_db()
     
-    # MIGRACIONES FORZADAS (Para asegurar cambios en Railway)
+    # MIGRACIONES DE EMERGENCIA PARA ASEGURAR QUE LOS CAMBIOS SE APLIQUEN EN RAILWAY
     conn = get_db()
     try:
-        # 1. Asegurar columna contract_file_url
-        conn.execute("ALTER TABLE contracts ADD COLUMN contract_file_url TEXT;")
-        print("[DB] Columna contract_file_url añadida.")
-    except: pass
-
-    try:
-        # DEBUG: Ver las listas
-        lists = conn.execute("SELECT id, name FROM lists").fetchall()
-        print(f"[DB] Listas existentes: {[dict(l) for l in lists]}")
-
-        # DEBUG: Ver qué hay actualmente
-        current = conn.execute("""
-            SELECT id, value, code, is_active FROM list_values 
-            WHERE list_id=(SELECT id FROM lists WHERE name='mention_type')
-        """).fetchall()
-        print(f"[DB] Menciones actuales antes de migrar: {[dict(r) for r in current]}")
-
-        # 2. Forzar actualización de Tipos de Mención
-        # Paso A: Renombrar los valores conocidos (Dedicado, Integrado, etc) a los nuevos nombres
-        # Esto mantiene los IDs para que los posts antiguos se actualicen visualmente
-        conn.execute("""
-            UPDATE list_values SET value='M (Mention)', value='M (Mention)', is_active=1
-            WHERE list_id IN (SELECT id FROM lists WHERE name='mention_type') 
-            AND (value='M (Mention)' OR code='dedicated' OR value='Dedicado' OR value='Dedicated')
-        """)
-        conn.execute("""
-            UPDATE list_values SET value='OM (Organic Mention)', value='OM (Organic Mention)', is_active=1
-            WHERE list_id IN (SELECT id FROM lists WHERE name='mention_type') 
-            AND (value='OM (Organic Mention)' OR code='integrated' OR value='Integrado' OR value='Integrated' OR value='Orgánico')
-        """)
-        conn.execute("""
-            UPDATE list_values SET value='TikTok', value='TikTok', is_active=1
-            WHERE list_id IN (SELECT id FROM lists WHERE name='mention_type') 
-            AND (value='TikTok' OR value='TikTok')
-        """)
+        # 1. Renombrar tabla post_views_history a daily_views si aún existe la vieja
+        exists_old_pvh = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='post_views_history'").fetchone()
+        exists_new_dv = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='daily_views'").fetchone()
+        if exists_old_pvh and not exists_new_dv:
+            conn.execute("ALTER TABLE post_views_history RENAME TO daily_views")
+            print("[DB] Tabla post_views_history renombrada a daily_views")
         
-        # Paso B: DESACTIVAR TODO LO DEMÁS (Importante: COALESCE para tratar NULLs)
-        conn.execute("""
-            UPDATE list_values SET is_active=0 
-            WHERE list_id IN (SELECT id FROM lists WHERE name='mention_type') 
-            AND COALESCE(code, '') NOT IN ('m_mention', 'om_mention', 'tiktok')
-        """)
+        # 2. Asegurar columnas en revenues
+        sql_rev = conn.execute("SELECT sql FROM sqlite_master WHERE name='revenues'").fetchone()
+        if sql_rev and 'new_revenue' not in sql_rev[0]:
+            conn.execute("ALTER TABLE revenues ADD COLUMN new_revenue REAL DEFAULT 0")
+            print("[DB] Columna 'new_revenue' añadida a revenues")
+            if 'amount' in sql_rev[0]:
+                conn.execute("UPDATE revenues SET new_revenue = amount")
+                print("[DB] Datos migrados de amount a new_revenue")
         
-        # Paso C: Asegurar que los 3 principales existen por si no estaban
-        for label, code in [('M (Mention)', 'm_mention'), ('OM (Organic Mention)', 'om_mention'), ('TikTok', 'tiktok')]:
-            conn.execute("""
-                INSERT OR IGNORE INTO list_values (list_id, value, code, is_active)
-                SELECT id, ?, ?, 1 FROM lists WHERE name='mention_type'
-            """, (label, code))
-            # Por si ya existía pero con otro nombre o estaba inactivo
-            conn.execute("""
-                UPDATE list_values SET value=?, is_active=1
-                WHERE code=? AND list_id IN (SELECT id FROM lists WHERE name='mention_type')
-            """, (label, code))
-        
+        # 3. Asegurar columnas en contracts
+        sql_con = conn.execute("SELECT sql FROM sqlite_master WHERE name='contracts'").fetchone()
+        if sql_con:
+            if 'contract_file_url' not in sql_con[0]:
+                conn.execute("ALTER TABLE contracts ADD COLUMN contract_file_url TEXT")
+                print("[DB] Columna 'contract_file_url' añadida")
+            if 'notes' not in sql_con[0]:
+                conn.execute("ALTER TABLE contracts ADD COLUMN notes TEXT")
+                print("[DB] Columna 'notes' añadida a contracts")
+            if 'pdf_url' in sql_con[0] and 'contract_file_url' in sql_con[0]:
+                conn.execute("UPDATE contracts SET contract_file_url = pdf_url WHERE contract_file_url IS NULL")
+
         conn.commit()
-        print("[DB] Tipos de mención actualizados (M, OM, TikTok).")
     except Exception as e:
-        print(f"[DB] Error en migración de menciones: {e}")
+        print(f"[DB] Error en migraciones de emergencia: {e}")
     finally:
         conn.close()
-    print("\n" + "="*40)
-    print("🚀 AMBASSADORS BACKOFFICE")
-    print("="*40 + "\n")
-    server = http.server.HTTPServer(("", PORT), Handler)
-    print(f"🚀 Server ready at http://localhost:{PORT}")
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        print("\nStopping...")
-        server.server_close()
+
+    port = int(os.environ.get("PORT", 8000))
+    print(f"🚀 Server running on port {port}")
+    server = ThreadedHTTPServer(("0.0.0.0", port), Handler)
+    server.serve_forever()
 # Force redeploy - 2026-05-02T18:56:00
 
