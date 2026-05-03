@@ -488,8 +488,13 @@ def init_db():
             new_cols = []
             for line in create_sql.split('\n'):
                 line = line.strip()
-                if line.upper().startswith('CREATE') or line.startswith(')') or not line: continue
+                if not line or line.upper().startswith('CREATE') or line.startswith(')') or line.startswith('--'): 
+                    continue
                 m = re.match(r'^([a-zA-Z0-9_]+)', line)
+                # Si el match falla con strip(), probamos sin strip pero con regex flexible
+                if not m:
+                    m = re.match(r'^\s*([a-zA-Z0-9_]+)', line)
+                
                 if m:
                     col = m.group(1).lower()
                     if col not in ['primary', 'foreign', 'unique', 'check', 'index', 'constraint']:
