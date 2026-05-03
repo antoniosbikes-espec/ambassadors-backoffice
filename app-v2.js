@@ -363,9 +363,16 @@ async function renderDbTable(tableName) {
         <tr>
           ${data.columns.map(col => {
             const val = row[col];
-            let displayVal = val;
-            if (val === null) displayVal = '<span style="color:var(--text-tertiary)">null</span>';
-            else if (typeof val === 'string' && val.length > 50) displayVal = val.substring(0, 47) + '...';
+            let displayVal;
+            if (val === null || val === undefined) {
+              displayVal = '<span style="color:var(--text-tertiary)">—</span>';
+            } else if (typeof val === 'string' && (val.startsWith('http://') || val.startsWith('https://'))) {
+              displayVal = `<a href="${val}" target="_blank" style="color:var(--accent-purple);word-break:break-all">${val}</a>`;
+            } else if (typeof val === 'string' && val.length > 60) {
+              displayVal = `<span title="${val.replace(/"/g,'&quot;')}">${val.substring(0, 57)}…</span>`;
+            } else {
+              displayVal = val;
+            }
             return `<td>${displayVal}</td>`;
           }).join('')}
         </tr>

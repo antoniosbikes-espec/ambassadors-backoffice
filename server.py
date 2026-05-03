@@ -530,6 +530,12 @@ def init_db():
         # 5. RPUs
         safe_drop_col('rpus', 'created_at')
 
+        # 6. Contracts — asegurar todas las columnas requeridas
+        safe_add_col('contracts', 'signing_at', 'TEXT')
+        safe_add_col('contracts', 'end_at', 'TEXT')
+        safe_add_col('contracts', 'contract_file_url', 'TEXT')
+        safe_add_col('contracts', 'notes', 'TEXT')
+
         # SEEDS
         conn.executescript(SEEDS)
         conn.executescript(DEMO_DATA)
