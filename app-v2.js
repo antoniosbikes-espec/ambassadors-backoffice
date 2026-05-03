@@ -33,6 +33,7 @@ async function init() {
   updateUserUI();
 
   await loadLists();
+  await initTablesDropdown();
 
   // Rellenar filtros principales...
   const filterCountry = document.getElementById('amb-filter-country');
@@ -271,7 +272,9 @@ function scoreBar(score) {
 function navigateTo(page) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  const pg = document.getElementById(`page-${page}`);
+  
+  const pageId = page.startsWith('db-table:') ? 'db-table' : page;
+  const pg = document.getElementById(`page-${pageId}`);
   if (pg) pg.classList.add('active');
   const nav = document.getElementById(`nav-${page}`);
   if (nav) nav.classList.add('active');
@@ -286,6 +289,100 @@ function navigateTo(page) {
   if (page === 'analytics') renderAnalytics();
   if (page === 'revenue') renderRevenue();
   if (page === 'settings') renderSettings();
+  if (page.startsWith('db-table:')) {
+    const tableName = page.split(':')[1];
+    renderDbTable(tableName);
+    // Actualizar breadcrumb específicamente para tablas
+    document.getElementById('breadcrumb-text').textContent = `Tabla: ${tableName}`;
+  }
+}
+
+// ─── DB TABLES EXPLORER ──────────────────────────────────────
+async function initTablesDropdown() {
+  const dropdownParent = document.getElementById('nav-tables-parent');
+  const dropdownContainer = document.getElementById('nav-tables-dropdown');
+  const tablesList = document.getElementById('sidebar-tables-list');
+  
+  if (!dropdownParent || !dropdownContainer || !tablesList) return;
+
+  // Toggle dropdown
+  dropdownParent.onclick = (e) => {
+    e.preventDefault();
+    dropdownContainer.classList.toggle('open');
+  };
+
+  try {
+    const tables = await GET('/tables');
+    tablesList.innerHTML = tables.map(name => `
+      <a href="#db-table:${name}" class="dropdown-item" data-table="${name}">
+        <span>${name}</span>
+      </a>
+    `).join('');
+
+    tablesList.querySelectorAll('.dropdown-item').forEach(item => {
+      item.onclick = (e) => {
+        e.preventDefault();
+        const tableName = item.dataset.table;
+        
+        // UI updates
+        tablesList.querySelectorAll('.dropdown-item').forEach(i => i.classList.remove('active'));
+        item.classList.add('active');
+        
+        navigateTo(`db-table:${tableName}`);
+      };
+    });
+  } catch (err) {
+    console.error("Error cargando tablas de la DB:", err);
+  }
+}
+
+async function renderDbTable(tableName) {
+  const titleEl = document.getElementById('db-table-title');
+  const thead = document.getElementById('db-data-thead');
+  const tbody = document.getElementById('db-data-tbody');
+  const countEl = document.getElementById('db-table-count');
+
+  if (!titleEl || !thead || !tbody || !countEl) return;
+
+  titleEl.textContent = `Tabla: ${tableName}`;
+  thead.innerHTML = '<tr><th colspan="100%">Cargando...</th></tr>';
+  tbody.innerHTML = '';
+  countEl.textContent = '— filas';
+
+  try {
+    const data = await GET(`/tables/${tableName}`);
+    
+    // Header
+    thead.innerHTML = `<tr>${data.columns.map(c => `<th>${c}</th>`).join('')}</tr>`;
+    
+    // Body
+    if (data.rows.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="${data.columns.length}" style="text-align:center; padding:40px; color:var(--text-tertiary)">Esta tabla no tiene datos</td></tr>`;
+    } else {
+      tbody.innerHTML = data.rows.map(row => `
+        <tr>
+          ${data.columns.map(col => {
+            const val = row[col];
+            let displayVal = val;
+            if (val === null) displayVal = '<span style="color:var(--text-tertiary)">null</span>';
+            else if (typeof val === 'string' && val.length > 50) displayVal = val.substring(0, 47) + '...';
+            return `<td>${displayVal}</td>`;
+          }).join('')}
+        </tr>
+      `).join('');
+    }
+    
+    countEl.textContent = `${data.rows.length} filas`;
+
+    // Refresh listener
+    const btnRefresh = document.getElementById('btn-refresh-table');
+    if (btnRefresh) {
+      btnRefresh.onclick = () => renderDbTable(tableName);
+    }
+  } catch (err) {
+    console.error(`Error cargando datos de la tabla ${tableName}:`, err);
+    thead.innerHTML = `<tr><th colspan="100%" style="color:var(--danger)">Error: ${err.message}</th></tr>`;
+  }
 }
 
 // ── Mobile sidebar drawer ────────────────────────────────────

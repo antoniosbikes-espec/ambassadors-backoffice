@@ -735,6 +735,32 @@ class Handler(BaseHTTPRequestHandler):
         # 3. Abrir DB y enrutar
         self.db = get_db()
         try:
+            # ── /api/tables ────────────────────────────
+            if path == '/api/tables' and method == 'GET':
+                # Listar todas las tablas de usuario
+                tables = self.db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '%_old' AND name NOT LIKE '%_repair'").fetchall()
+                return self.send_json([t['name'] for t in tables])
+
+            m_table = re.match(r'^/api/tables/([^/]+)$', path)
+            if m_table and method == 'GET':
+                table_name = m_table.group(1)
+                # Seguridad básica: validar que el nombre de la tabla existe en sqlite_master
+                exists = self.db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,)).fetchone()
+                if not exists:
+                    return self.send_err("Tabla no encontrada", 404)
+                
+                # Obtener columnas
+                columns_info = self.db.execute(f"PRAGMA table_info({table_name})").fetchall()
+                columns = [c['name'] for c in columns_info]
+                
+                # Obtener filas
+                rows = self.db.execute(f"SELECT * FROM {table_name} LIMIT 500").fetchall()
+                return self.send_json({
+                    'table': table_name,
+                    'columns': columns,
+                    'rows': rows_to_list(rows)
+                })
+
             self.route(method)
         finally:
             self.db.close()
