@@ -471,143 +471,59 @@ def get_db():
 def init_db():
     conn = get_db()
     
-    def safe_reconstruct(table_name, create_sql, mapping=None):
-        """
-        Reconstruye una tabla de forma segura. 
-        mapping: { 'col_nueva': 'col_vieja' }
-        """
-        try:
-            cursor = conn.execute(f"PRAGMA table_info({table_name})")
-            old_cols = [row[1] for row in cursor.fetchall()]
-            if not old_cols:
-                conn.execute(create_sql)
-                return
+def init_db():
+    conn = get_db()
+    
+    def table_has_col(table, col):
+        cursor = conn.execute(f"PRAGMA table_info({table})")
+        cols = [r[1].lower() for r in cursor.fetchall()]
+        return col.lower() in cols
 
-            # Extraer columnas nuevas del SQL
-            import re
-            new_cols = []
-            for line in create_sql.split('\n'):
-                line = line.strip()
-                if not line or line.upper().startswith('CREATE') or line.startswith(')') or line.startswith('--'): 
-                    continue
-                m = re.match(r'^([a-zA-Z0-9_]+)', line)
-                # Si el match falla con strip(), probamos sin strip pero con regex flexible
-                if not m:
-                    m = re.match(r'^\s*([a-zA-Z0-9_]+)', line)
-                
-                if m:
-                    col = m.group(1).lower()
-                    if col not in ['primary', 'foreign', 'unique', 'check', 'index', 'constraint']:
-                        new_cols.append(col)
-
-            # Comprobar si realmente necesitamos migrar (si sobran columnas o faltan)
-            # También comprobamos si el mapeo implica un cambio
-            needs_migration = False
-            if set(old_cols) != set(new_cols):
-                needs_migration = True
-            if mapping:
-                for nc, sc in mapping.items():
-                    if nc in new_cols and sc in old_cols and nc != sc:
-                        needs_migration = True
-            
-            if not needs_migration:
-                return
-
-            print(f"[DB] Migrando {table_name}...")
-            conn.execute(f"ALTER TABLE {table_name} RENAME TO {table_name}_old")
-            conn.execute(create_sql)
-            
-            # Construir el INSERT
-            dest_cols = []
-            source_cols = []
-            for nc in new_cols:
-                sc = mapping.get(nc, nc) if mapping else nc
-                if sc in old_cols:
-                    dest_cols.append(nc)
-                    source_cols.append(sc)
-            
-            if dest_cols:
-                sql = f"INSERT INTO {table_name} ({', '.join(dest_cols)}) SELECT {', '.join(source_cols)} FROM {table_name}_old"
-                conn.execute(sql)
-            
-            conn.execute(f"DROP TABLE {table_name}_old")
-            print(f"[DB] {table_name} migrado con éxito.")
-        except Exception as e:
-            print(f"[DB] Error en {table_name}: {e}")
-            # Intentar revertir si es posible
+    def safe_add_col(table, col, type_def):
+        if not table_has_col(table, col):
             try:
-                conn.execute(f"DROP TABLE IF EXISTS {table_name}")
-                conn.execute(f"ALTER TABLE {table_name}_old RENAME TO {table_name}")
-            except: pass
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {type_def}")
+                print(f"[DB] Columna {col} añadida a {table}")
+            except Exception as e: print(f"[DB] Error añadiendo {col}: {e}")
+
+    def safe_drop_col(table, col):
+        if table_has_col(table, col):
+            try:
+                conn.execute(f"ALTER TABLE {table} DROP COLUMN {col}")
+                print(f"[DB] Columna {col} eliminada de {table}")
+            except Exception as e: print(f"[DB] Error eliminando {col}: {e}")
 
     try:
         conn.execute("PRAGMA foreign_keys = OFF")
         
-        # 1. Ambassadors (Restaurar created_at, quitar notes)
-        safe_reconstruct('ambassadors', """
-            CREATE TABLE ambassadors (
-                id                   INTEGER PRIMARY KEY AUTOINCREMENT,
-                email                TEXT    NOT NULL UNIQUE,
-                first_name           TEXT    NOT NULL,
-                last_name            TEXT,
-                primary_language_id  INTEGER REFERENCES list_values(id),
-                country_id           INTEGER REFERENCES list_values(id),
-                created_at           TEXT    NOT NULL DEFAULT (datetime('now'))
-            )
-        """)
-
-        # 2. Lists (Quitar created_at)
-        safe_reconstruct('lists', "CREATE TABLE lists (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE)")
-
-        # 3. List Values (Quitar code y created_at)
-        safe_reconstruct('list_values', """
-            CREATE TABLE list_values (
-                id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                list_id    INTEGER NOT NULL REFERENCES lists(id),
-                value      TEXT    NOT NULL,
-                is_active  INTEGER NOT NULL DEFAULT 1,
-                UNIQUE(list_id, value)
-            )
-        """)
-
-        # 4. Revenues (Quitar niche_id, created_at, amount -> new_revenue)
-        safe_reconstruct('revenues', """
-            CREATE TABLE revenues (
-                id            INTEGER PRIMARY KEY AUTOINCREMENT,
-                views_date    TEXT    NOT NULL,
-                country_id    INTEGER NOT NULL REFERENCES list_values(id),
-                currency_id   INTEGER REFERENCES list_values(id),
-                new_revenue   REAL    NOT NULL DEFAULT 0
-            )
-        """, mapping={'new_revenue': 'amount'})
-
-        # 5. Posts (Quitar created_at)
-        safe_reconstruct('posts', """
-            CREATE TABLE posts (
-                id               INTEGER PRIMARY KEY AUTOINCREMENT,
-                profile_id       INTEGER NOT NULL REFERENCES profiles(id),
-                url              TEXT    NOT NULL UNIQUE,
-                mention_type_id  INTEGER REFERENCES list_values(id),
-                mention_offset   INTEGER NOT NULL DEFAULT 0,
-                content_score    REAL    CHECK(content_score BETWEEN 0 AND 1),
-                published_at     TEXT
-            )
-        """)
-
-        # 6. RPUs (Quitar created_at)
-        safe_reconstruct('rpus', """
-            CREATE TABLE rpus (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                views_date  TEXT    NOT NULL,
-                country_id  INTEGER NOT NULL REFERENCES list_values(id),
-                niche_id    INTEGER NOT NULL REFERENCES list_values(id),
-                rpu         REAL    NOT NULL DEFAULT 0,
-                UNIQUE(views_date, country_id, niche_id)
-            )
-        """)
-
-        # Asegurar SCHEMA y SEEDS
+        # Asegurar tablas básicas
         conn.executescript(SCHEMA)
+        
+        # MIGRACIONES ESPECÍFICAS
+        # 1. Ambassadors
+        safe_add_col('ambassadors', 'created_at', "TEXT NOT NULL DEFAULT (datetime('now'))")
+        safe_drop_col('ambassadors', 'notes')
+        
+        # 2. Lists & Values
+        safe_drop_col('lists', 'created_at')
+        safe_drop_col('list_values', 'created_at')
+        safe_drop_col('list_values', 'code')
+        
+        # 3. Revenues
+        safe_add_col('revenues', 'new_revenue', "REAL NOT NULL DEFAULT 0")
+        if table_has_col('revenues', 'amount'):
+            conn.execute("UPDATE revenues SET new_revenue = amount WHERE new_revenue = 0")
+            safe_drop_col('revenues', 'amount')
+        safe_drop_col('revenues', 'created_at')
+        safe_drop_col('revenues', 'niche_id')
+        
+        # 4. Posts
+        safe_drop_col('posts', 'created_at')
+        
+        # 5. RPUs
+        safe_drop_col('rpus', 'created_at')
+
+        # SEEDS
         conn.executescript(SEEDS)
         
         conn.execute("PRAGMA foreign_keys = ON")
