@@ -5,11 +5,11 @@ Python 3 + SQLite (stdlib only, no pip required)
 """
 
 import sqlite3, json, os, sys, re, time, urllib.request
-from threading import Lock
-import http.server
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from socketserver import ThreadingMixIn
 from datetime import datetime, timezone
 from urllib.parse import urlparse, parse_qs
+from threading import Lock
 
 # Usamos una carpeta dedicada para la base de datos en el raíz
 if os.path.exists('/persistent_data'):
@@ -452,6 +452,10 @@ SELECT '2024-03-01',
 WHERE (SELECT COUNT(*) FROM rpus) < 2;
 """
 
+
+class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
+    """Handle requests in a separate thread."""
+    daemon_threads = True
 
 def get_db():
     conn = sqlite3.connect(DB_PATH, timeout=30)
