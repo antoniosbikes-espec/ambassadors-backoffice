@@ -470,21 +470,76 @@ def get_db():
 
 def init_db():
     conn = get_db()
-    # Asegurar que las tablas existan con el SCHEMA actual
-    conn.executescript(SCHEMA)
-    conn.executescript(SEEDS)
     
-    # LIMPIEZA DE TABLAS ANTIGUAS
+    def reconstruct_table(table_name, create_sql):
+        """Reconstruye una tabla para eliminar columnas sobrantes o cambiar tipos."""
+        try:
+            # Obtener columnas actuales
+            cursor = conn.execute(f"PRAGMA table_info({table_name})")
+            current_cols = [row[1] for row in cursor.fetchall()]
+            if not current_cols:
+                # La tabla no existe, se crea normalmente
+                conn.execute(create_sql)
+                return
+
+            # Extraer nombres de columnas del nuevo SQL (aproximado)
+            # Buscamos patrones como "col_name  TYPE" o "col_name TYPE"
+            import re
+            new_cols = []
+            lines = create_sql.split('\n')
+            for line in lines:
+                line = line.strip()
+                if line.startswith('CREATE') or line.startswith(')') or not line: continue
+                match = re.match(r'^([a-zA-Z0-9_]+)\s+', line)
+                if match:
+                    col = match.group(1).lower()
+                    if col not in ['primary', 'foreign', 'unique', 'check', 'index', 'constraint']:
+                        new_cols.append(col)
+            
+            # Si todas las columnas nuevas existen y no sobran (o sobran pero queremos quitarlas)
+            # Comparamos sets para ver si hay que borrar alguna
+            if set(current_cols) == set(new_cols):
+                return
+
+            print(f"[DB] Reconstruyendo tabla {table_name} para limpiar columnas...")
+            conn.execute(f"ALTER TABLE {table_name} RENAME TO {table_name}_old")
+            conn.execute(create_sql)
+            
+            # Intersección de columnas para copiar datos
+            common_cols = [c for c in current_cols if c in new_cols]
+            col_list = ", ".join(common_cols)
+            if col_list:
+                conn.execute(f"INSERT INTO {table_name} ({col_list}) SELECT {col_list} FROM {table_name}_old")
+            
+            conn.execute(f"DROP TABLE {table_name}_old")
+            conn.commit()
+        except Exception as e:
+            print(f"[DB] Error reconstruyendo {table_name}: {e}")
+            conn.execute(f"DROP TABLE IF EXISTS {table_name}_old")
+
     try:
         conn.execute("PRAGMA foreign_keys = OFF")
-        for tbl in ['posts_old', 'profile_analyses_old', 'contracts_repair', 'contracts_old', 'pvh_repair', 'post_views_history']:
-            conn.execute(f"DROP TABLE IF EXISTS {tbl}")
+        
+        # Lista de tablas y su SQL de creación (extraído del SCHEMA)
+        # Nota: He quitado las comas finales y limpiado un poco para el regex
+        reconstruct_table('lists', "CREATE TABLE lists (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE)")
+        reconstruct_table('list_values', "CREATE TABLE list_values (id INTEGER PRIMARY KEY AUTOINCREMENT, list_id INTEGER NOT NULL REFERENCES lists(id), value TEXT NOT NULL, is_active INTEGER NOT NULL DEFAULT 1, UNIQUE(list_id, value))")
+        reconstruct_table('ambassadors', "CREATE TABLE ambassadors (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL UNIQUE, first_name TEXT NOT NULL, last_name TEXT, primary_language_id INTEGER REFERENCES list_values(id), country_id INTEGER REFERENCES list_values(id))")
+        reconstruct_table('profiles', "CREATE TABLE profiles (id INTEGER PRIMARY KEY AUTOINCREMENT, ambassador_id INTEGER NOT NULL REFERENCES ambassadors(id), platform_id INTEGER NOT NULL REFERENCES list_values(id), handle TEXT, url TEXT NOT NULL, niche_id INTEGER REFERENCES list_values(id))")
+        reconstruct_table('posts', "CREATE TABLE posts (id INTEGER PRIMARY KEY AUTOINCREMENT, profile_id INTEGER NOT NULL REFERENCES profiles(id), url TEXT NOT NULL UNIQUE, mention_type_id INTEGER REFERENCES list_values(id), mention_offset INTEGER NOT NULL DEFAULT 0, content_score REAL CHECK(content_score BETWEEN 0 AND 1), published_at TEXT)")
+        reconstruct_table('revenues', "CREATE TABLE revenues (id INTEGER PRIMARY KEY AUTOINCREMENT, views_date TEXT NOT NULL, country_id INTEGER NOT NULL REFERENCES list_values(id), currency_id INTEGER REFERENCES list_values(id), new_revenue REAL NOT NULL DEFAULT 0)")
+        reconstruct_table('rpus', "CREATE TABLE rpus (id INTEGER PRIMARY KEY AUTOINCREMENT, views_date TEXT NOT NULL, country_id INTEGER NOT NULL REFERENCES list_values(id), niche_id INTEGER NOT NULL REFERENCES list_values(id), rpu REAL NOT NULL DEFAULT 0, UNIQUE(views_date, country_id, niche_id))")
+        
+        # Tablas que solo necesitan CREATE IF NOT EXISTS (sin borrar datos antiguos si es posible)
+        conn.executescript(SCHEMA)
+        conn.executescript(SEEDS)
+        
         conn.execute("PRAGMA foreign_keys = ON")
         conn.commit()
-    except:
-        pass
+    except Exception as e:
+        print(f"[DB] Error en init_db: {e}")
+        conn.execute("PRAGMA foreign_keys = ON")
 
-    conn.commit()
     conn.close()
     print(f"[DB] Initialised at {DB_PATH}")
 
