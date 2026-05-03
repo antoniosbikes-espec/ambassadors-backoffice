@@ -490,6 +490,12 @@ def init_db():
                 print(f"[DB] Columna {col} eliminada de {table}")
             except Exception as e: print(f"[DB] Error eliminando {col}: {e}")
 
+    # DEBUG: Listar todo en la DB
+    try:
+        items = conn.execute("SELECT type, name FROM sqlite_master").fetchall()
+        print(f"[DB DEBUG] Objetos en DB: {[dict(i) for i in items]}")
+    except: pass
+
     try:
         conn.execute("PRAGMA foreign_keys = OFF")
         
