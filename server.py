@@ -490,97 +490,68 @@ def init_db():
     except:
         pass # Ya existe
     
-    # MIGRACIÓN SCORES: Escalar 0-1 a 0-10 de forma robusta
+    # REPARACIÓN DE LLAVES FORÁNEAS CORRUPTAS (contracts -> profile_analyses_old, etc.)
     try:
         conn.execute("PRAGMA foreign_keys = OFF")
         
-        # 1. Recuperación de fallos previos (si existen las tablas _old)
+        # 1. Reparar CONTRACTS
+        sql_contracts = conn.execute("SELECT sql FROM sqlite_master WHERE name='contracts'").fetchone()
+        if sql_contracts and 'profile_analyses_old' in sql_contracts[0]:
+            print("[DB] Reparando llaves foráneas en 'contracts'...")
+            conn.execute("ALTER TABLE contracts RENAME TO contracts_repair")
+            conn.execute("""
+                CREATE TABLE contracts (
+                    id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+                    profile_id               INTEGER NOT NULL REFERENCES profiles(id),
+                    status_id                INTEGER NOT NULL REFERENCES list_values(id),
+                    currency_id              INTEGER REFERENCES list_values(id),
+                    price_per_standard_post  REAL,
+                    price_per_top_post       REAL,
+                    monthly_standard_posts   INTEGER DEFAULT 0,
+                    monthly_top_posts        INTEGER DEFAULT 0,
+                    last_analysis_id         INTEGER REFERENCES profile_analyses(id),
+                    signing_at               TEXT,
+                    end_at                   TEXT,
+                    pdf_url                  TEXT,
+                    created_at               TEXT NOT NULL DEFAULT (datetime('now'))
+                )
+            """)
+            conn.execute("INSERT INTO contracts SELECT * FROM contracts_repair")
+            conn.execute("DROP TABLE contracts_repair")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_con_profile ON contracts(profile_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_con_status  ON contracts(status_id)")
+            conn.commit()
+
+        # 2. Reparar POST_VIEWS_HISTORY
+        sql_v = conn.execute("SELECT sql FROM sqlite_master WHERE name='post_views_history'").fetchone()
+        if sql_v and 'posts_old' in sql_v[0]:
+            print("[DB] Reparando llaves foráneas en 'post_views_history'...")
+            conn.execute("ALTER TABLE post_views_history RENAME TO pvh_repair")
+            conn.execute("""
+                CREATE TABLE post_views_history (
+                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    post_id     INTEGER NOT NULL REFERENCES posts(id),
+                    views_date  TEXT    NOT NULL,
+                    new_views   INTEGER NOT NULL DEFAULT 0,
+                    UNIQUE(post_id, views_date)
+                )
+            """)
+            conn.execute("INSERT INTO post_views_history SELECT * FROM pvh_repair")
+            conn.execute("DROP TABLE pvh_repair")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_pvh_post ON post_views_history(post_id, views_date)")
+            conn.commit()
+
+        # 3. Limpieza final de tablas _old (si quedara alguna)
         for tbl in ['posts', 'profile_analyses']:
-            old_tbl = tbl + "_old"
-            exists_main = conn.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{tbl}'").fetchone()
-            exists_old = conn.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{old_tbl}'").fetchone()
-            
-            if exists_old and not exists_main:
-                print(f"[DB] Recuperando {tbl} desde {old_tbl}...")
-                conn.execute(f"ALTER TABLE {old_tbl} RENAME TO {tbl}")
-                conn.commit()
-            elif exists_old and exists_main:
-                print(f"[DB] Limpiando tabla temporal {old_tbl}...")
-                conn.execute(f"DROP TABLE {old_tbl}")
-                conn.commit()
-
-        # 2. Ejecutar migración de Posts
-        table_sql = conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='posts'").fetchone()
-        if table_sql and 'BETWEEN 0 AND 1)' in table_sql[0]:
-            print("[DB] Migrando schema de posts para soportar content_score 0-10...")
-            conn.execute("ALTER TABLE posts RENAME TO posts_old")
-            conn.execute("""
-                CREATE TABLE posts (
-                    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-                    profile_id       INTEGER NOT NULL REFERENCES profiles(id),
-                    url              TEXT    NOT NULL UNIQUE,
-                    mention_type_id  INTEGER REFERENCES list_values(id),
-                    mention_offset   INTEGER NOT NULL DEFAULT 0,
-                    content_score    REAL    CHECK(content_score BETWEEN 0 AND 10),
-                    published_at     TEXT,
-                    created_at       TEXT    NOT NULL DEFAULT (datetime('now'))
-                )
-            """)
-            conn.execute("INSERT INTO posts SELECT * FROM posts_old")
-            conn.execute("DROP TABLE posts_old")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_post_profile ON posts(profile_id)")
-            conn.execute("UPDATE posts SET content_score = content_score * 10 WHERE content_score > 0 AND content_score <= 1")
-            conn.commit()
-            print("[DB] Migración de posts completada")
-
-        # 3. Ejecutar migración de Profile Analyses
-        table_sql_pa = conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='profile_analyses'").fetchone()
-        if table_sql_pa and 'content_target_score BETWEEN 0 AND 1)' in table_sql_pa[0]:
-            print("[DB] Migrando schema de profile_analyses para soportar content_target_score 0-10...")
-            conn.execute("ALTER TABLE profile_analyses RENAME TO profile_analyses_old")
-            conn.execute("""
-                CREATE TABLE profile_analyses (
-                    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
-                    profile_id            INTEGER NOT NULL REFERENCES profiles(id),
-                    expected_views        INTEGER NOT NULL DEFAULT 0,
-                    total_30d_posts       INTEGER NOT NULL DEFAULT 0,
-                    cache_score           REAL CHECK(cache_score BETWEEN 0 AND 1),
-                    content_target_score  REAL CHECK(content_target_score BETWEEN 0 AND 10),
-                    country_target_score  REAL CHECK(country_target_score BETWEEN 0 AND 1),
-                    created_at            TEXT NOT NULL DEFAULT (datetime('now'))
-                )
-            """)
-            conn.execute("INSERT INTO profile_analyses SELECT * FROM profile_analyses_old")
-            conn.execute("DROP TABLE profile_analyses_old")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_pa_profile ON profile_analyses(profile_id)")
-            conn.execute("UPDATE profile_analyses SET content_target_score = content_target_score * 10 WHERE content_target_score > 0 AND content_target_score <= 1")
-            conn.commit()
-            print("[DB] Migración de profile_analyses completada")
-
-    except Exception as e:
+            conn.execute(f"DROP TABLE IF EXISTS {tbl}_old")
+        
         conn.execute("PRAGMA foreign_keys = ON")
-        print(f"[DB] Error en migración de scores: {e}")
-        
-    # Solo cargar datos demo de personas si la tabla está totalmente vacía
-    count = conn.execute("SELECT COUNT(*) FROM ambassadors").fetchone()[0]
-    if count == 0:
-        print("[DB] Cargando datos demo (embajadores)...")
-        conn.executescript(DEMO_DATA)
-        
-    # MIGRACIÓN MENCIONES: Limpiar menciones antiguas si existen
-    try:
-        conn.execute("""
-            UPDATE list_values SET is_active=0 
-            WHERE list_id=(SELECT id FROM lists WHERE name='mention_type') 
-            AND code NOT IN ('m_mention', 'om_mention', 'tiktok')
-        """)
-        # Asegurar que las nuevas tengan el texto correcto
-        conn.execute("UPDATE list_values SET value='M (Mention)' WHERE code='m_mention'")
-        conn.execute("UPDATE list_values SET value='OM (Organic Mention)' WHERE code='om_mention'")
-        conn.execute("UPDATE list_values SET value='TikTok' WHERE code='tiktok'")
-        print("[DB] Tipos de mención actualizados")
-    except:
-        pass
+        conn.commit()
+        print("[DB] Reparación de integridad completada.")
+    except Exception as e:
+        print(f"[DB] Error en reparación profunda: {e}")
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.commit()
 
     conn.commit()
     conn.close()
@@ -707,29 +678,31 @@ class Handler(BaseHTTPRequestHandler):
         return None
 
     def sync_all_views(self):
-        print("[Sync] Iniciando sincronización de visualizaciones reales...")
-        posts = self.db.execute("""
-            SELECT po.id, po.url, lv.code as platform_code 
-            FROM posts po
-            JOIN profiles p ON p.id = po.profile_id
-            JOIN list_values lv ON lv.id = p.platform_id
-        """).fetchall()
-        
-        updated = 0
-        for p in posts:
-            real_v = self.fetch_real_views(p['platform_code'], p['url'])
-            if real_v is not None:
-                # Guardar en el histórico (si es mayor que el anterior para no perder datos si falla el scrape)
-                last_v = self.db.execute("SELECT SUM(new_views) FROM post_views_history WHERE post_id=?", (p['id'],)).fetchone()[0] or 0
-                if real_v > last_v:
-                    diff = real_v - last_v
-                    # Usamos INSERT OR IGNORE y luego UPDATE para ser compatibles con versiones antiguas de SQLite sin ON CONFLICT
-                    self.db.execute("INSERT OR IGNORE INTO post_views_history (post_id, new_views, views_date) VALUES (?, 0, date('now'))", (p['id'],))
-                    self.db.execute("UPDATE post_views_history SET new_views = new_views + ? WHERE post_id=? AND views_date=date('now')", (diff, p['id']))
-                    updated += 1
-        
-        self.db.commit()
-        self.send_json({"status": "success", "updated_posts": updated})
+        try:
+            print("[Sync] Iniciando sincronización de visualizaciones reales...")
+            posts = self.db.execute("""
+                SELECT po.id, po.url, lv.code as platform_code 
+                FROM posts po
+                JOIN profiles p ON p.id = po.profile_id
+                JOIN list_values lv ON lv.id = p.platform_id
+            """).fetchall()
+            
+            updated = 0
+            for p in posts:
+                real_v = self.fetch_real_views(p['platform_code'], p['url'])
+                if real_v is not None:
+                    last_v = self.db.execute("SELECT SUM(new_views) FROM post_views_history WHERE post_id=?", (p['id'],)).fetchone()[0] or 0
+                    if real_v > last_v:
+                        diff = real_v - last_v
+                        self.db.execute("INSERT OR IGNORE INTO post_views_history (post_id, new_views, views_date) VALUES (?, 0, date('now'))", (p['id'],))
+                        self.db.execute("UPDATE post_views_history SET new_views = new_views + ? WHERE post_id=? AND views_date=date('now')", (diff, p['id']))
+                        updated += 1
+            
+            self.db.commit()
+            self.send_json({"status": "success", "updated_posts": updated})
+        except Exception as e:
+            print(f"[Sync] Error: {e}")
+            self.send_err(f"Error al sincronizar: {e}", 500)
 
     def do_POST(self): self.handle_method('POST')
     def do_PUT(self):  self.handle_method('PUT')
@@ -744,6 +717,13 @@ class Handler(BaseHTTPRequestHandler):
             return self.handle_login()
         if path == '/api/ping':
             return self.send_json({'status': 'ok', 'user_defined': APP_USERNAME != 'marketing'})
+        if path == '/api/health':
+            return self.send_json({'status': 'ok', 'timestamp': '2026-05-02T20:12:00', 'version': '2.0.7'})
+        if path == '/api/debug-schema':
+            db = get_db()
+            rows = db.execute("SELECT type, name, tbl_name, sql FROM sqlite_master").fetchall()
+            db.close()
+            return self.send_json(rows_to_list(rows))
         if path == '/api/ping':
             return self.send_json({'status': 'ok'})
 
@@ -1510,6 +1490,7 @@ class Handler(BaseHTTPRequestHandler):
                 (SELECT id FROM profile_analyses WHERE profile_id=p.id ORDER BY created_at DESC LIMIT 1))
             {w_sql_s}
         """, params).fetchall()
+        print(f"[Dashboard] Contratos firmados encontrados para revenue: {len(rows_perf)}")
         
         # Multiplicadores oficiales (RPU/1.50)
         COUNTRY_RPM_MULT = {
@@ -1576,6 +1557,8 @@ class Handler(BaseHTTPRequestHandler):
                 lv_country.code AS country_code,
                 lv_mt.code AS mention_type_code
             {base_from}
+            JOIN contracts c ON c.profile_id = p.id
+            JOIN list_values lv_s ON lv_s.id = c.status_id
             JOIN posts po ON po.profile_id = p.id
             JOIN post_views_history pvh ON pvh.post_id = po.id
             LEFT JOIN list_values lv_plat ON lv_plat.id = p.platform_id
@@ -1583,7 +1566,7 @@ class Handler(BaseHTTPRequestHandler):
             LEFT JOIN list_values lv_mt ON lv_mt.id = po.mention_type_id
             LEFT JOIN profile_analyses pa ON pa.id = 
                 (SELECT id FROM profile_analyses WHERE profile_id=p.id ORDER BY created_at DESC LIMIT 1)
-            {w_sql_real}
+            {w_sql_real} AND lv_s.code='signed'
             GROUP BY po.id
         """, params + [f'-{days} days']).fetchall()
 

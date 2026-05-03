@@ -591,12 +591,51 @@ const COUNTRY_RPM_MULT = {
 const LATAM_CODES = new Set(['AR', 'CO', 'CL', 'PE', 'EC', 'VE', 'UY', 'PY', 'BO', 'GT', 'HN', 'SV', 'NI', 'CR', 'PA', 'DO', 'PR']);
 const CACHE_MULT = { LOW: 0.8, MID: 1.0, HIGH: 1.2 };
 
+function calcRealRevenue(post, platformCode, countryCode, pa) {
+  const rv = post.total_views || 0;
+  if (rv <= 0) return 0;
+  
+  const c_code = (countryCode || '').toUpperCase();
+  const countryMult = COUNTRY_RPM_MULT[c_code] ?? (LATAM_CODES.has(c_code) ? 0.40 : 0.12);
+  
+  let cacheMult = 1.0;
+  if (typeof pa?.cache_score === 'number' && pa.cache_score > 0) {
+    cacheMult = pa.cache_score;
+  } else {
+    cacheMult = CACHE_MULT[(pa?.cache_score || 'MID').toUpperCase()] ?? 1.0;
+  }
+  
+  const cts = pa?.content_target_score ?? 1.0;
+  const cots = pa?.country_target_score ?? 0.6;
+  const cots_adj = Math.min(cots / 0.6, 1.0);
+  
+  const base_val_post = (rv / 1000.0) * 42.0 * countryMult * cacheMult * cts * cots_adj;
+  
+  const pCode = (platformCode || '').toLowerCase();
+  const mtCode = (post.mention_type_code || '').toLowerCase();
+  
+  if (pCode === 'youtube') {
+    if (mtCode === 'om_mention') return base_val_post * 4.0;
+    if (mtCode === 'm_mention') return base_val_post * 2.5;
+    return base_val_post * 2.5; // Default to M
+  }
+  if (pCode === 'tiktok') {
+    return base_val_post * 1.0;
+  }
+  return 0;
+}
+
 function calcExpectedRevenue(pa, platformCode, monthlyStd, monthlyTop, countryCode) {
   const ev = pa?.expected_views || 0;
   if (ev === 0) return 0;
   const c_code = (countryCode || '').toUpperCase();
   const countryMult = COUNTRY_RPM_MULT[c_code] ?? (LATAM_CODES.has(c_code) ? 0.40 : 0.12);
-  const cacheMult = CACHE_MULT[(pa?.cache_score || 'MID').toUpperCase()] ?? 1.0;
+  let cacheMult = 1.0;
+  if (typeof pa?.cache_score === 'number' && pa.cache_score > 0) {
+    cacheMult = pa.cache_score;
+  } else {
+    cacheMult = CACHE_MULT[(pa?.cache_score || 'MID').toUpperCase()] ?? 1.0;
+  }
   const cts = pa?.content_target_score ?? 1.0;
   const cots = Math.min((pa?.country_target_score ?? 0.6) / 0.6, 1.0);
   const base = (ev / 1000) * 42 * countryMult * cacheMult * cts * cots;
@@ -607,29 +646,30 @@ function calcExpectedRevenue(pa, platformCode, monthlyStd, monthlyTop, countryCo
 }
 
 async function renderDetailOverview() {
-  const a = await GET(`/ambassadors/${selectedAmbassadorId}`).catch(() => ({}));
-  const posts = await GET('/posts', { ambassador_id: selectedAmbassadorId }).catch(() => []);
-  const contracts = await GET('/contracts', { ambassador_id: selectedAmbassadorId }).catch(() => []);
+  const [a, posts, contracts, dash] = await Promise.all([
+    GET(`/ambassadors/${selectedAmbassadorId}`).catch(() => ({})),
+    GET('/posts', { ambassador_id: selectedAmbassadorId }).catch(() => []),
+    GET('/contracts', { ambassador_id: selectedAmbassadorId }).catch(() => []),
+    GET('/dashboard', { ambassador_id: selectedAmbassadorId }).catch(() => null)
+  ]);
 
-  const totalViews = posts.reduce((s, p) => s + (p.total_views || 0), 0);
+  const totalViews = dash?.kpis?.total_views ?? posts.reduce((s, p) => s + (p.total_views || 0), 0);
   const avgScore = posts.length ? posts.reduce((s, p) => s + (p.content_score || 0), 0) / posts.length : 0;
 
-  // ── Expected revenue via official formula ──────────────────
-  let expectedRev = 0;
-  await Promise.all(contracts.map(async c => {
-    const paList = await GET('/profile_analyses', { profile_id: c.profile_id }).catch(() => []);
-    const pa = paList[0] || null;
-    const profile = await GET(`/profiles/${c.profile_id}`).catch(() => null);
-    expectedRev += calcExpectedRevenue(
-      pa, profile?.platform_code,
-      c.monthly_standard_posts, c.monthly_top_posts, a.country_code
-    );
-  }));
+  const expectedRev = dash?.kpis?.expected_revenue ?? 0;
+  const realRev = dash?.kpis?.real_revenue ?? 0;
 
   document.getElementById('ov-views').textContent = fmt(totalViews, 'compact');
   document.getElementById('ov-posts').textContent = posts.length;
   document.getElementById('ov-score').textContent = avgScore.toFixed(2);
-  document.getElementById('ov-revenue').textContent = fmt(expectedRev, 'currency');
+  
+  // Mostrar Revenue Esperado como valor principal y el Real como referencia (igual que el Dashboard)
+  document.getElementById('ov-revenue').innerHTML = `
+    ${fmt(expectedRev, 'currency')}
+    <div style="font-size: 11px; color: var(--text-tertiary); font-weight: 400; margin-top: 2px;">
+      Revenue real: ${fmt(realRev, 'currency')}
+    </div>
+  `;
 
   // ── Status badge ──────────────────────────────────────────
   const latestContract = contracts[0];
@@ -684,6 +724,9 @@ async function renderDetailProfiles() {
             <div class="profile-stats">${fmt(p.total_views || 0, 'compact')} views · ${p.niche || '—'}</div>
           </div>
           <div class="header-actions">
+            <button class="btn-icon" onclick="analyzeProfile(${p.id})" title="Análisis de rendimiento" style="color:var(--accent-teal)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            </button>
             <button class="btn-icon" onclick="editProfile(${p.id})" title="Editar canal">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             </button>
@@ -705,6 +748,58 @@ window.deleteProfile = async (pid) => {
   } catch (e) {
     alert('Error al eliminar canal: ' + e.message);
   }
+};
+
+window.analyzeProfile = async (pid) => {
+  const an = await GET('/profile_analyses', { profile_id: pid }).then(list => list[0] || {}).catch(() => ({}));
+  
+  openModal('Análisis de rendimiento', `
+    <div class="form-group">
+      <label class="form-label">Visualizaciones esperadas (avg/post)</label>
+      <input type="number" id="ap-views" value="${an.expected_views || 0}" placeholder="Ej: 150000" />
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Cache Score</label>
+        <select id="ap-cache" class="filter-select" style="width:100%">
+          <option value="LOW" ${an.cache_score === 0.8 ? 'selected' : ''}>Bajo (0.8x)</option>
+          <option value="MID" ${!an.cache_score || an.cache_score === 1.0 ? 'selected' : ''}>Medio (1.0x)</option>
+          <option value="HIGH" ${an.cache_score === 1.2 ? 'selected' : ''}>Alto (1.2x)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Content Score (0-10)</label>
+        <input type="number" id="ap-content" value="${(an.content_target_score || 1.0) * 5}" step="0.1" min="0" max="10" />
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Country Target Score (Ref: 0.6)</label>
+      <input type="number" id="ap-country" value="${an.country_target_score || 0.6}" step="0.05" />
+      <small style="color:var(--text-tertiary)">Representa el porcentaje de audiencia en el país objetivo.</small>
+    </div>
+  `, async () => {
+    const expected_views = parseInt(document.getElementById('ap-views').value) || 0;
+    const cache_val = document.getElementById('ap-cache').value;
+    const cache_score = cache_val === 'LOW' ? 0.8 : (cache_val === 'HIGH' ? 1.2 : 1.0);
+    const content_target_score = (parseFloat(document.getElementById('ap-content').value) || 5) / 5;
+    const country_target_score = parseFloat(document.getElementById('ap-country').value) || 0.6;
+
+    try {
+      await POST('/profile_analyses', {
+        profile_id: pid,
+        expected_views,
+        cache_score,
+        content_target_score,
+        country_target_score
+      });
+      alert('Análisis guardado correctamente. El revenue del dashboard se actualizará.');
+      await renderDetailProfiles();
+      return true;
+    } catch (e) {
+      alert('Error: ' + e.message);
+      return false;
+    }
+  });
 };
 
 window.editProfile = async (pid) => {
@@ -1327,34 +1422,35 @@ async function renderAnalytics() {
   if (niche) qs.niche_code = niche;
   if (platform) qs.platform_code = platform;
 
-  const [ambassadors, profiles, posts, contracts] = await Promise.all([
+  const [ambassadors, profiles, posts, contracts, analyses] = await Promise.all([
     GET('/ambassadors', qs),
     GET('/profiles', qs),
     GET('/posts', qs),
-    GET('/contracts', qs)
-  ]).catch(() => [[], [], [], []]);
+    GET('/contracts', qs),
+    GET('/profile_analyses', qs)
+  ]).catch(() => [[], [], [], [], []]);
 
-  const groups = buildAnalyticsGroups(ambassadors, profiles, posts, contracts, groupBy);
+  const groups = buildAnalyticsGroups(ambassadors, profiles, posts, contracts, analyses, groupBy);
   renderScatterChart(groups, metricX, metricY);
   renderCumulativeChart(groups);
   renderAnalyticsTable(groups);
 }
 
-function buildAnalyticsGroups(ambassadors, profiles, posts, contracts, groupBy) {
+function buildAnalyticsGroups(ambassadors, profiles, posts, contracts, analyses, groupBy) {
   const map = {};
   console.log('Building analytics groups by:', groupBy);
 
   if (['niche', 'platform', 'profile'].includes(groupBy)) {
-    // Agrupar por canales individuales para mayor precisión en nichos/plataformas
     profiles.forEach(p => {
       const amb = ambassadors.find(a => a.id == p.ambassador_id);
       if (!amb) return;
 
       const profPosts = posts.filter(po => po.profile_id == p.id);
-      const profContracts = contracts.filter(c => c.profile_id == p.id);
-      const revenue = profContracts.reduce((s, c) =>
-        s + ((c.price_per_standard_post || 0) * (c.monthly_standard_posts || 0) +
-          (c.price_per_top_post || 0) * (c.monthly_top_posts || 0)) * 12, 0);
+      const pa = analyses.find(a => a.profile_id == p.id) || null;
+      
+      const realRevenue = profPosts.reduce((s, po) => {
+        return s + calcRealRevenue(po, p.platform_code, amb.country_code, pa);
+      }, 0);
 
       let key;
       if (groupBy === 'niche') key = p.niche || p.niche_code || '—';
@@ -1366,17 +1462,18 @@ function buildAnalyticsGroups(ambassadors, profiles, posts, contracts, groupBy) 
       map[key].posts += profPosts.length;
       map[key].scoreSum += profPosts.reduce((s, po) => s + (po.content_score || 0), 0);
       map[key].scoreCount += profPosts.length;
-      map[key].revenue += revenue;
+      map[key].revenue += realRevenue;
     });
   } else {
-    // Agrupar por entidad ambassadors (Embajador o País)
     ambassadors.forEach(a => {
       const ambPosts = posts.filter(p => p.ambassador_id == a.id);
-      const ambContracts = contracts.filter(c => c.ambassador_id == a.id);
       const ambProfiles = profiles.filter(p => p.ambassador_id == a.id);
-      const revenue = ambContracts.reduce((s, c) =>
-        s + ((c.price_per_standard_post || 0) * (c.monthly_standard_posts || 0) +
-          (c.price_per_top_post || 0) * (c.monthly_top_posts || 0)) * 12, 0);
+      
+      const realRevenue = ambPosts.reduce((s, po) => {
+        const prof = profiles.find(pr => pr.id == po.profile_id);
+        const pa = analyses.find(an => an.profile_id == po.profile_id) || null;
+        return s + calcRealRevenue(po, prof?.platform_code, a.country_code, pa);
+      }, 0);
 
       let key;
       if (groupBy === 'country') {
@@ -1390,7 +1487,7 @@ function buildAnalyticsGroups(ambassadors, profiles, posts, contracts, groupBy) 
       map[key].posts += ambPosts.length;
       map[key].scoreSum += ambPosts.reduce((s, p) => s + (p.content_score || 0), 0);
       map[key].scoreCount += ambPosts.length;
-      map[key].revenue += revenue;
+      map[key].revenue += realRevenue;
     });
   }
   return Object.values(map).map(g => ({
