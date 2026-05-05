@@ -695,7 +695,7 @@ class Handler(BaseHTTPRequestHandler):
             
             updated = 0
             # Usar la fecha actual del servidor (YYYY-MM-DD)
-            today_str = datetime.datetime.now().strftime('%Y-%m-%d')
+            today_str = datetime.now().strftime('%Y-%m-%d')
             
             for p in posts:
                 real_v = self.fetch_real_views(p['platform_value'], p['url'])
