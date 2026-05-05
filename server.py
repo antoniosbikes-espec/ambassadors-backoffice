@@ -1260,6 +1260,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def update_contract(self, cid):
         body = self.read_body()
+        print(f"[CONTRACT UPDATE] id={cid} notes={repr(body.get('notes'))} body_keys={list(body.keys())}", flush=True)
         self.db.execute("""UPDATE contracts SET status_id=?,currency_id=?,
               price_per_standard_post=?,price_per_top_post=?,
               monthly_standard_posts=?,monthly_top_posts=?,
@@ -1271,7 +1272,9 @@ class Handler(BaseHTTPRequestHandler):
              body.get('notes'), cid))
         self.db.commit()
         row = self.db.execute("SELECT * FROM contracts WHERE id=?", (cid,)).fetchone()
-        self.send_json(dict(row))
+        result = dict(row)
+        print(f"[CONTRACT UPDATE] saved notes={repr(result.get('notes'))}", flush=True)
+        self.send_json(result)
 
     def delete_contract(self, cid):
         try:
