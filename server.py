@@ -1246,12 +1246,13 @@ class Handler(BaseHTTPRequestHandler):
         cur = self.db.execute("""
             INSERT INTO contracts(profile_id,status_id,currency_id,
               price_per_standard_post,price_per_top_post,
-              monthly_standard_posts,monthly_top_posts,signing_at,end_at,contract_file_url)
-            VALUES(?,?,?,?,?,?,?,?,?,?)""",
+              monthly_standard_posts,monthly_top_posts,signing_at,end_at,contract_file_url,notes)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
             (body.get('profile_id'), body.get('status_id'), body.get('currency_id'),
              body.get('price_per_standard_post'), body.get('price_per_top_post'),
              body.get('monthly_standard_posts',0), body.get('monthly_top_posts',0),
-             body.get('signing_at'), body.get('end_at'), body.get('contract_file_url'))
+             body.get('signing_at'), body.get('end_at'), body.get('contract_file_url'),
+             body.get('notes'))
         )
         self.db.commit()
         row = self.db.execute("SELECT * FROM contracts WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -1262,11 +1263,12 @@ class Handler(BaseHTTPRequestHandler):
         self.db.execute("""UPDATE contracts SET status_id=?,currency_id=?,
               price_per_standard_post=?,price_per_top_post=?,
               monthly_standard_posts=?,monthly_top_posts=?,
-              signing_at=?,end_at=?,contract_file_url=? WHERE id=?""",
+              signing_at=?,end_at=?,contract_file_url=?,notes=? WHERE id=?""",
             (body.get('status_id'), body.get('currency_id'),
              body.get('price_per_standard_post'), body.get('price_per_top_post'),
              body.get('monthly_standard_posts',0), body.get('monthly_top_posts',0),
-             body.get('signing_at'), body.get('end_at'), body.get('contract_file_url'), cid))
+             body.get('signing_at'), body.get('end_at'), body.get('contract_file_url'),
+             body.get('notes'), cid))
         self.db.commit()
         row = self.db.execute("SELECT * FROM contracts WHERE id=?", (cid,)).fetchone()
         self.send_json(dict(row))
@@ -1410,8 +1412,8 @@ class Handler(BaseHTTPRequestHandler):
     def create_revenue(self):
         body = self.read_body()
         cur = self.db.execute(
-            "INSERT INTO revenues(views_date,country_id,niche_id,currency_id,amount) VALUES(?,?,?,?,?)",
-            (body.get('views_date'), body.get('country_id'), body.get('niche_id'), body.get('currency_id'), body.get('amount',0))
+            "INSERT INTO revenues(views_date,country_id,currency_id,new_revenue) VALUES(?,?,?,?)",
+            (body.get('views_date'), body.get('country_id'), body.get('currency_id'), body.get('new_revenue', body.get('amount', 0)))
         )
         self.db.commit()
         self.send_json({'id': cur.lastrowid}, 201)
@@ -1526,26 +1528,44 @@ class Handler(BaseHTTPRequestHandler):
         """, params).fetchall()
         print(f"[Dashboard] Contratos firmados encontrados para revenue: {len(rows_perf)}")
         
-        # Multiplicadores oficiales (RPU/1.50)
+        # Multiplicadores oficiales por nombre de país (como se almacena en la BD en español)
         COUNTRY_RPM_MULT = {
-            'MÉXICO': 1.00, 'ESPAÑA': 1.33, 'COLOMBIA': 0.53, 'CHILE': 0.53, 'BRASIL': 0.33,
-            'ALEMANIA': 3.00, 'FRANCIA': 1.47, 'ITALIA': 2.67, 'PORTUGUÉS': 0.72, 'REINO UNIDO': 3.00,
-            'ESTADOS UNIDOS': 5.00, 'AUSTRALIA': 3.67, 'CANADÁ': 3.67, 'ARGENTINA': 0.40
+            'MEXICO': 1.00, 'MÉXICO': 1.00,
+            'ESPAÑA': 1.33, 'SPAIN': 1.33,
+            'COLOMBIA': 0.53, 'CHILE': 0.53,
+            'BRASIL': 0.33, 'BRAZIL': 0.33,
+            'ALEMANIA': 3.00, 'GERMANY': 3.00,
+            'FRANCIA': 1.47, 'FRANCE': 1.47,
+            'ITALIA': 2.67, 'ITALY': 2.67,
+            'PORTUGAL': 0.72, 'PORTUGUÉS': 0.72,
+            'REINO UNIDO': 3.00, 'UNITED KINGDOM': 3.00, 'UK': 3.00,
+            'ESTADOS UNIDOS': 5.00, 'UNITED STATES': 5.00, 'US': 5.00,
+            'AUSTRALIA': 3.67, 'CANADA': 3.67, 'CANADÁ': 3.67,
+            'ARGENTINA': 0.40, 'IRLANDA': 3.00, 'IRELAND': 3.00,
+            # Códigos ISO cortos (fallback por compatibilidad)
+            'MX': 1.00, 'ES': 1.33, 'CO': 0.53, 'CL': 0.53, 'BR': 0.33,
+            'DE': 3.00, 'FR': 1.47, 'IT': 2.67, 'PT': 0.72,
+            'US2': 5.00, 'AU': 3.67, 'CA': 3.67, 'AR': 0.40, 'IE': 3.00
         }
-        # Multiplicador Latam por defecto (0.40)
-        LATAM_NAMES = ['ARGENTINA', 'COLOMBIA', 'CHILE', 'PERÚ', 'ECUADOR', 'VENEZUELA', 'URUGUAY', 'PARAGUAY', 'BOLIVIA', 'GUATEMALA', 'HONDURAS', 'EL SALVADOR', 'NICARAGUA', 'COSTA RICA', 'PANAMÁ', 'REPÚBLICA DOMINICANA', 'PUERTO RICO']
+        # Nombres/códigos LATAM para el multiplicador por defecto (0.40)
+        LATAM_CODES_SET = {
+            'AR', 'CO', 'CL', 'PE', 'EC', 'VE', 'UY', 'PY', 'BO', 'GT', 'HN', 'SV', 'NI', 'CR', 'PA', 'DO', 'PR',
+            'ARGENTINA', 'COLOMBIA', 'CHILE', 'PERÚ', 'PERU', 'ECUADOR', 'VENEZUELA', 'URUGUAY',
+            'PARAGUAY', 'BOLIVIA', 'GUATEMALA', 'HONDURAS', 'EL SALVADOR', 'NICARAGUA',
+            'COSTA RICA', 'PANAMÁ', 'PANAMA', 'REPÚBLICA DOMINICANA', 'PUERTO RICO'
+        }
         
         expected_revenue = 0
         for r in rows_perf:
             ev = r['expected_views'] or 0
             if ev == 0: continue
             
-            # 1. Country Multiplier
+            # 1. Country Multiplier (usando código corto igual que el frontend)
             c_code = (r['country_value'] or '').upper()
             country_mult = COUNTRY_RPM_MULT.get(c_code)
             if country_mult is None:
-                if c_code in LATAM_NAMES: country_mult = 0.40
-                else: country_mult = 0.12 # Developing / Default
+                if c_code in LATAM_CODES_SET: country_mult = 0.40
+                else: country_mult = 0.12  # Developing / Default
             
             # 2. Cache Multiplier — ENUM: LOW=0.8, MID=1.0, HIGH=1.2 o número
             c_val = r['cache_score']
@@ -1578,9 +1598,9 @@ class Handler(BaseHTTPRequestHandler):
                 expected_revenue += 0
 
         # Revenue Real (Automático basado en visualizaciones reales y fórmula oficial)
+        # Se calcula sobre TODOS los posts (igual que el frontend Analytics), no solo contratos Firmados
         real_conds = ["dv.views_date >= date('now', ?)"]
         w_sql_real, _ = build_where(real_conds)
-        # Obtenemos las views reales por post y los datos de su perfil para aplicar la fórmula
         rows_real = self.db.execute(f"""
             SELECT 
                 po.id AS post_id,
@@ -1590,8 +1610,6 @@ class Handler(BaseHTTPRequestHandler):
                 lv_country.value AS country_value,
                 lv_mt.value AS mention_type_value
             {base_from}
-            JOIN contracts c ON c.profile_id = p.id
-            JOIN list_values lv_s ON lv_s.id = c.status_id
             JOIN posts po ON po.profile_id = p.id
             JOIN daily_views dv ON dv.post_id = po.id
             LEFT JOIN list_values lv_plat ON lv_plat.id = p.platform_id
@@ -1599,7 +1617,7 @@ class Handler(BaseHTTPRequestHandler):
             LEFT JOIN list_values lv_mt ON lv_mt.id = po.mention_type_id
             LEFT JOIN profile_analyses pa ON pa.id = 
                 (SELECT id FROM profile_analyses WHERE profile_id=p.id ORDER BY created_at DESC LIMIT 1)
-            {w_sql_real} AND lv_s.value='Firmado'
+            {w_sql_real}
             GROUP BY po.id
         """, params + [f'-{days} days']).fetchall()
 
@@ -1611,7 +1629,7 @@ class Handler(BaseHTTPRequestHandler):
             c_code = (r['country_value'] or '').upper()
             country_mult = COUNTRY_RPM_MULT.get(c_code)
             if country_mult is None:
-                if c_code in LATAM_CODES: country_mult = 0.40
+                if c_code in LATAM_CODES_SET: country_mult = 0.40
                 else: country_mult = 0.12
             
             c_val = r['cache_score']

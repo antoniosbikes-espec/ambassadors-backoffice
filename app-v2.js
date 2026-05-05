@@ -703,11 +703,32 @@ async function switchDetailTab(tabId) {
 
 // ── Revenue formula constants (mirrors server.py) ────────────
 const COUNTRY_RPM_MULT = {
-  MX: 1.00, ES: 1.33, CO: 0.53, CL: 0.53, BR: 0.33, DE: 3.00,
-  FR: 1.47, IT: 2.67, PT: 0.72, UK: 3.00, US: 5.00, AU: 3.67,
-  CA: 3.67, AR: 0.40, IE: 3.00
+  // Nombres en español (como están en la BD)
+  'MEXICO': 1.00, 'MÉXICO': 1.00,
+  'ESPAÑA': 1.33, 'SPAIN': 1.33,
+  'COLOMBIA': 0.53, 'CHILE': 0.53,
+  'BRASIL': 0.33, 'BRAZIL': 0.33,
+  'ALEMANIA': 3.00, 'GERMANY': 3.00,
+  'FRANCIA': 1.47, 'FRANCE': 1.47,
+  'ITALIA': 2.67, 'ITALY': 2.67,
+  'PORTUGAL': 0.72, 'PORTUGUÉS': 0.72,
+  'REINO UNIDO': 3.00, 'UNITED KINGDOM': 3.00, 'UK': 3.00,
+  'ESTADOS UNIDOS': 5.00, 'UNITED STATES': 5.00, 'US': 5.00,
+  'AUSTRALIA': 3.67, 'CANADA': 3.67, 'CANADÁ': 3.67,
+  'ARGENTINA': 0.40, 'IRLANDA': 3.00, 'IRELAND': 3.00,
+  // Códigos ISO cortos (fallback)
+  'MX': 1.00, 'ES': 1.33, 'CO': 0.53, 'CL': 0.53, 'BR': 0.33,
+  'DE': 3.00, 'FR': 1.47, 'IT': 2.67, 'PT': 0.72,
+  'AU': 3.67, 'CA': 3.67, 'AR': 0.40, 'IE': 3.00
 };
-const LATAM_CODES = new Set(['AR', 'CO', 'CL', 'PE', 'EC', 'VE', 'UY', 'PY', 'BO', 'GT', 'HN', 'SV', 'NI', 'CR', 'PA', 'DO', 'PR']);
+const LATAM_CODES = new Set([
+  // Códigos ISO
+  'AR', 'CO', 'CL', 'PE', 'EC', 'VE', 'UY', 'PY', 'BO', 'GT', 'HN', 'SV', 'NI', 'CR', 'PA', 'DO', 'PR',
+  // Nombres en español
+  'ARGENTINA', 'COLOMBIA', 'CHILE', 'PERÚ', 'PERU', 'ECUADOR', 'VENEZUELA', 'URUGUAY',
+  'PARAGUAY', 'BOLIVIA', 'GUATEMALA', 'HONDURAS', 'EL SALVADOR', 'NICARAGUA',
+  'COSTA RICA', 'PANAMÁ', 'PANAMA', 'REPÚBLICA DOMINICANA', 'PUERTO RICO'
+]);
 const CACHE_MULT = { LOW: 0.8, MID: 1.0, HIGH: 1.2 };
 
 function calcRealRevenue(post, platformCode, countryCode, pa) {
@@ -734,9 +755,9 @@ function calcRealRevenue(post, platformCode, countryCode, pa) {
   const mtCode = (post.mention_type_value || '').toLowerCase();
   
   if (pCode === 'youtube') {
-    if (mtCode === 'om_mention') return base_val_post * 4.0;
-    if (mtCode === 'm_mention') return base_val_post * 2.5;
-    return base_val_post * 2.5; // Default to M
+    // mtCode puede ser 'om (organic mention)', 'om_mention', etc.
+    if (mtCode.startsWith('om') || mtCode.includes('organic')) return base_val_post * 4.0;
+    return base_val_post * 2.5; // M (Mention) o default
   }
   if (pCode === 'tiktok') {
     return base_val_post * 1.0;
@@ -961,6 +982,7 @@ async function renderDetailContracts() {
           <div class="contract-meta">
             <div class="contract-type">${c.handle || '—'}</div>
             <div class="contract-dates">${c.signing_at ? c.signing_at.slice(0, 10) : '—'} → ${c.end_at ? c.end_at.slice(0, 10) : '—'}</div>
+            ${c.notes ? `<div class="contract-notes" title="${c.notes.replace(/"/g,'&quot;')}">${c.notes.length > 80 ? c.notes.substring(0, 77) + '…' : c.notes}</div>` : ''}
           </div>
           <span class="contract-value">${fmt(monthly * 12, 'currency')}/año</span>
           ${statusBadge(c.status_value, c.status)}
@@ -1044,6 +1066,10 @@ window.editContract = async (cid) => {
         </a>
       </div>` : ''}
     </div>
+    <div class="form-group">
+      <label class="form-label">Notas</label>
+      <textarea id="ec-notes" rows="3" style="width:100%;background:var(--surface-2);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--text-primary);padding:8px 12px;font-size:13px;resize:vertical;font-family:inherit">${c.notes || ''}</textarea>
+    </div>
   `, async () => {
     const status_id = parseInt(document.getElementById('ec-status').value);
     const currency_id = parseInt(document.getElementById('ec-currency').value) || null;
@@ -1053,6 +1079,7 @@ window.editContract = async (cid) => {
     const monthly_top_posts = parseInt(document.getElementById('ec-mtop').value) || 0;
     const signing_at = document.getElementById('ec-sign').value || null;
     const end_at = document.getElementById('ec-end').value || null;
+    const notes = document.getElementById('ec-notes').value.trim() || null;
     if (!status_id) { alert('Estado es obligatorio'); return false; }
     
     let contract_file_url = c.contract_file_url;
@@ -1066,7 +1093,7 @@ window.editContract = async (cid) => {
       await PUT(`/contracts/${cid}`, {
         status_id, currency_id,
         price_per_standard_post, monthly_standard_posts,
-        price_per_top_post, monthly_top_posts, signing_at, end_at, contract_file_url
+        price_per_top_post, monthly_top_posts, signing_at, end_at, contract_file_url, notes
       });
       await renderDetailContracts();
       return true;
@@ -1356,6 +1383,10 @@ document.getElementById('btn-add-contract').addEventListener('click', async () =
       <label class="form-label">Subir Contrato (.pdf)</label>
       <input type="file" id="ac-pdf" accept=".pdf" class="filter-select" style="width:100%; padding: 4px;" />
     </div>
+    <div class="form-group">
+      <label class="form-label">Notas</label>
+      <textarea id="ac-notes" rows="3" style="width:100%;background:var(--surface-2);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--text-primary);padding:8px 12px;font-size:13px;resize:vertical;font-family:inherit" placeholder="Observaciones, condiciones especiales..."></textarea>
+    </div>
     <hr style="border:0;border-top:1px solid rgba(255,255,255,0.1);margin:15px 0" />
     <h3 style="font-size:14px;margin-bottom:10px;">Canales incluidos</h3>
     ${profilesHtml}
@@ -1364,6 +1395,7 @@ document.getElementById('btn-add-contract').addEventListener('click', async () =
     const currency_id = parseInt(document.getElementById('ac-currency').value) || null;
     const signing_at = document.getElementById('ac-sign').value || null;
     const end_at = document.getElementById('ac-end').value || null;
+    const notes = document.getElementById('ac-notes').value.trim() || null;
     if (!status_id) { alert('Estado es obligatorio'); return false; }
     
     const pdfFile = document.getElementById('ac-pdf').files[0];
@@ -1387,7 +1419,7 @@ document.getElementById('btn-add-contract').addEventListener('click', async () =
         await POST('/contracts', {
           profile_id: pid, status_id, currency_id,
           price_per_standard_post, monthly_standard_posts,
-          price_per_top_post, monthly_top_posts, signing_at, end_at, contract_file_url
+          price_per_top_post, monthly_top_posts, signing_at, end_at, contract_file_url, notes
         });
       }
       await renderDetailContracts();
