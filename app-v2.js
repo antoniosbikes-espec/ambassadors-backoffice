@@ -833,8 +833,14 @@ async function renderDetailOverview() {
     const labels = [], values = [];
     const now = new Date();
     for (let i = 29; i >= 0; i--) {
-      const d = new Date(now); d.setDate(d.getDate() - i);
-      const key = d.toISOString().slice(0, 10);
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      // Formato YYYY-MM-DD local (evita desajustes UTC)
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const key = `${yyyy}-${mm}-${dd}`;
+      
       labels.push(d.toLocaleDateString('es-ES', { month: 'short', day: 'numeric' }));
       values.push(dailyMap[key] || 0);
     }
@@ -1080,6 +1086,7 @@ window.editContract = async (cid) => {
     const signing_at = document.getElementById('ec-sign').value || null;
     const end_at = document.getElementById('ec-end').value || null;
     const notes = document.getElementById('ec-notes').value.trim() || null;
+    const last_analysis_id = c.last_analysis_id;
     if (!status_id) { alert('Estado es obligatorio'); return false; }
     
     let contract_file_url = c.contract_file_url;
@@ -1093,7 +1100,7 @@ window.editContract = async (cid) => {
       await PUT(`/contracts/${cid}`, {
         status_id, currency_id,
         price_per_standard_post, monthly_standard_posts,
-        price_per_top_post, monthly_top_posts, signing_at, end_at, contract_file_url, notes
+        price_per_top_post, monthly_top_posts, signing_at, end_at, contract_file_url, notes, last_analysis_id
       });
       await renderDetailContracts();
       return true;

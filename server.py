@@ -694,18 +694,34 @@ class Handler(BaseHTTPRequestHandler):
             """).fetchall()
             
             updated = 0
+            # Usar la fecha actual del servidor (YYYY-MM-DD)
+            today_str = datetime.datetime.now().strftime('%Y-%m-%d')
+            
             for p in posts:
                 real_v = self.fetch_real_views(p['platform_value'], p['url'])
-                if real_v is not None:
+                if real_v is not None and real_v > 0:
+                    # Obtener el total histórico guardado
                     last_v = self.db.execute("SELECT SUM(new_views) FROM daily_views WHERE post_id=?", (p['id'],)).fetchone()[0] or 0
+                    
                     if real_v > last_v:
                         diff = real_v - last_v
-                        self.db.execute("INSERT OR IGNORE INTO daily_views (post_id, new_views, views_date) VALUES (?, 0, date('now'))", (p['id'],))
-                        self.db.execute("UPDATE daily_views SET new_views = new_views + ? WHERE post_id=? AND views_date=date('now')", (diff, p['id']))
+                        
+                        # Si es un post antiguo que acabamos de añadir y no tiene histórico, 
+                        # pero ya tiene muchas visitas, NO queremos meterlas todas hoy.
+                        # Pero el usuario quiere ver "algo". 
+                        # Si last_v es 0, guardamos el total actual pero como base inicial.
+                        
+                        # Aseguramos que existe el registro para hoy
+                        exists = self.db.execute("SELECT id FROM daily_views WHERE post_id=? AND views_date=?", (p['id'], today_str)).fetchone()
+                        if not exists:
+                            self.db.execute("INSERT INTO daily_views (post_id, new_views, views_date) VALUES (?, ?, ?)", (p['id'], diff, today_str))
+                        else:
+                            self.db.execute("UPDATE daily_views SET new_views = new_views + ? WHERE post_id=? AND views_date=?", (diff, p['id'], today_str))
+                        
                         updated += 1
             
             self.db.commit()
-            self.send_json({"status": "success", "updated_posts": updated})
+            self.send_json({"status": "success", "updated_posts": updated, "date": today_str})
         except Exception as e:
             print(f"[Sync] Error: {e}")
             self.send_err(f"Error al sincronizar: {e}", 500)
@@ -1174,16 +1190,25 @@ class Handler(BaseHTTPRequestHandler):
 
     def create_profile_analysis(self):
         body = self.read_body()
+        profile_id = body.get('profile_id')
         cur = self.db.execute("""
             INSERT INTO profile_analyses(profile_id,expected_views,total_30d_posts,
               cache_score,content_target_score,country_target_score)
             VALUES(?,?,?,?,?,?)""",
-            (body.get('profile_id'), body.get('expected_views',0),
+            (profile_id, body.get('expected_views',0),
              body.get('total_30d_posts',0), body.get('cache_score'),
              body.get('content_target_score'), body.get('country_target_score'))
         )
+        analysis_id = cur.lastrowid
+        
+        # Vincular automáticamente al contrato más reciente de este perfil
+        self.db.execute("""
+            UPDATE contracts SET last_analysis_id = ? 
+            WHERE id = (SELECT id FROM contracts WHERE profile_id = ? ORDER BY created_at DESC LIMIT 1)
+        """, (analysis_id, profile_id))
+        
         self.db.commit()
-        row = self.db.execute("SELECT * FROM profile_analyses WHERE id=?", (cur.lastrowid,)).fetchone()
+        row = self.db.execute("SELECT * FROM profile_analyses WHERE id=?", (analysis_id,)).fetchone()
         self.send_json(dict(row), 201)
 
     # ── CONTRACT ENDPOINTS ───────────────────────────────────
@@ -1246,13 +1271,13 @@ class Handler(BaseHTTPRequestHandler):
         cur = self.db.execute("""
             INSERT INTO contracts(profile_id,status_id,currency_id,
               price_per_standard_post,price_per_top_post,
-              monthly_standard_posts,monthly_top_posts,signing_at,end_at,contract_file_url,notes)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+              monthly_standard_posts,monthly_top_posts,signing_at,end_at,contract_file_url,notes,last_analysis_id)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
             (body.get('profile_id'), body.get('status_id'), body.get('currency_id'),
              body.get('price_per_standard_post'), body.get('price_per_top_post'),
              body.get('monthly_standard_posts',0), body.get('monthly_top_posts',0),
              body.get('signing_at'), body.get('end_at'), body.get('contract_file_url'),
-             body.get('notes'))
+             body.get('notes'), body.get('last_analysis_id'))
         )
         self.db.commit()
         row = self.db.execute("SELECT * FROM contracts WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -1264,12 +1289,12 @@ class Handler(BaseHTTPRequestHandler):
         self.db.execute("""UPDATE contracts SET status_id=?,currency_id=?,
               price_per_standard_post=?,price_per_top_post=?,
               monthly_standard_posts=?,monthly_top_posts=?,
-              signing_at=?,end_at=?,contract_file_url=?,notes=? WHERE id=?""",
+              signing_at=?,end_at=?,contract_file_url=?,notes=?,last_analysis_id=? WHERE id=?""",
             (body.get('status_id'), body.get('currency_id'),
              body.get('price_per_standard_post'), body.get('price_per_top_post'),
              body.get('monthly_standard_posts',0), body.get('monthly_top_posts',0),
              body.get('signing_at'), body.get('end_at'), body.get('contract_file_url'),
-             body.get('notes'), cid))
+             body.get('notes'), body.get('last_analysis_id'), cid))
         self.db.commit()
         row = self.db.execute("SELECT * FROM contracts WHERE id=?", (cid,)).fetchone()
         result = dict(row)
