@@ -1220,6 +1220,7 @@ class Handler(BaseHTTPRequestHandler):
               p.handle, p.ambassador_id,
               a.first_name || ' ' || COALESCE(a.last_name,'') AS ambassador_name,
               lv_plat.value AS platform, lv_plat.value AS platform_value,
+              pa.created_at as analysis_date, pa.expected_views as analysis_views,
               (c.price_per_standard_post * c.monthly_standard_posts +
                COALESCE(c.price_per_top_post,0) * COALESCE(c.monthly_top_posts,0)) * 12
                AS expected_annual_revenue
@@ -1229,6 +1230,7 @@ class Handler(BaseHTTPRequestHandler):
             LEFT JOIN list_values lv_st   ON lv_st.id   = c.status_id
             LEFT JOIN list_values lv_cur  ON lv_cur.id  = c.currency_id
             LEFT JOIN list_values lv_plat ON lv_plat.id = p.platform_id
+            LEFT JOIN profile_analyses pa ON pa.id = c.last_analysis_id
         """
         params = []
         where = []
@@ -1268,16 +1270,25 @@ class Handler(BaseHTTPRequestHandler):
 
     def create_contract(self):
         body = self.read_body()
+        profile_id = body.get('profile_id')
+        last_analysis_id = body.get('last_analysis_id')
+
+        # Si no viene análisis, intentamos buscar el más reciente del perfil
+        if not last_analysis_id:
+            row_pa = self.db.execute("SELECT id FROM profile_analyses WHERE profile_id=? ORDER BY created_at DESC LIMIT 1", (profile_id,)).fetchone()
+            if row_pa:
+                last_analysis_id = row_pa[0]
+
         cur = self.db.execute("""
             INSERT INTO contracts(profile_id,status_id,currency_id,
               price_per_standard_post,price_per_top_post,
               monthly_standard_posts,monthly_top_posts,signing_at,end_at,contract_file_url,notes,last_analysis_id)
             VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (body.get('profile_id'), body.get('status_id'), body.get('currency_id'),
-             body.get('price_per_standard_post'), body.get('price_per_top_post'),
-             body.get('monthly_standard_posts',0), body.get('monthly_top_posts',0),
-             body.get('signing_at'), body.get('end_at'), body.get('contract_file_url'),
-             body.get('notes'), body.get('last_analysis_id'))
+            (profile_id, body.get('status_id'), body.get('currency_id'),
+              body.get('price_per_standard_post'), body.get('price_per_top_post'),
+              body.get('monthly_standard_posts',0), body.get('monthly_top_posts',0),
+              body.get('signing_at'), body.get('end_at'), body.get('contract_file_url'),
+              body.get('notes'), last_analysis_id)
         )
         self.db.commit()
         row = self.db.execute("SELECT * FROM contracts WHERE id=?", (cur.lastrowid,)).fetchone()

@@ -914,8 +914,8 @@ window.analyzeProfile = async (pid) => {
         </select>
       </div>
       <div class="form-group">
-        <label class="form-label">Content Score (0-10)</label>
-        <input type="number" id="ap-content" value="${(an.content_target_score || 1.0) * 5}" step="0.1" min="0" max="10" />
+        <label class="form-label">Content Score (0-1)</label>
+        <input type="number" id="ap-content" value="${an.content_target_score || 1.0}" step="0.01" min="0" max="1" />
       </div>
     </div>
     <div class="form-group">
@@ -927,7 +927,7 @@ window.analyzeProfile = async (pid) => {
     const expected_views = parseInt(document.getElementById('ap-views').value) || 0;
     const cache_val = document.getElementById('ap-cache').value;
     const cache_score = cache_val === 'LOW' ? 0.8 : (cache_val === 'HIGH' ? 1.2 : 1.0);
-    const content_target_score = (parseFloat(document.getElementById('ap-content').value) || 5) / 5;
+    const content_target_score = parseFloat(document.getElementById('ap-content').value) || 1.0;
     const country_target_score = parseFloat(document.getElementById('ap-country').value) || 0.6;
 
     try {
@@ -988,6 +988,10 @@ async function renderDetailContracts() {
           <div class="contract-meta">
             <div class="contract-type">${c.handle || '—'}</div>
             <div class="contract-dates">${c.signing_at ? c.signing_at.slice(0, 10) : '—'} → ${c.end_at ? c.end_at.slice(0, 10) : '—'}</div>
+            ${c.analysis_date ? `<div class="contract-analysis" style="font-size:11px; color:var(--accent-teal); margin-top:2px;">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:2px"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+              Análisis: ${fmt(c.analysis_views || 0, 'compact')} views (${c.analysis_date.slice(0,10)})
+            </div>` : '<div style="font-size:11px; color:var(--text-tertiary); margin-top:2px;">Sin análisis vinculado</div>'}
             ${c.notes ? `<div class="contract-notes" title="${c.notes.replace(/"/g,'&quot;')}">${c.notes.length > 80 ? c.notes.substring(0, 77) + '…' : c.notes}</div>` : ''}
           </div>
           <span class="contract-value">${fmt(monthly * 12, 'currency')}/año</span>
@@ -1025,6 +1029,13 @@ window.deleteContract = async (cid) => {
 window.editContract = async (cid) => {
   const c = await GET(`/contracts/${cid}`).catch(() => null);
   if (!c) return;
+  const analyses = await GET('/profile_analyses', { profile_id: c.profile_id }).catch(() => []);
+
+  const analysisOptions = analyses.map(an => `
+    <option value="${an.id}" ${an.id === c.last_analysis_id ? 'selected' : ''}>
+      ${fmt(an.expected_views, 'compact')} views (${an.created_at.slice(0,10)})
+    </option>
+  `).join('');
 
   const updateDatesVisibility = () => {
     const sel = document.getElementById('ec-status');
@@ -1073,6 +1084,14 @@ window.editContract = async (cid) => {
       </div>` : ''}
     </div>
     <div class="form-group">
+      <label class="form-label">Análisis de referencia</label>
+      <select id="ec-analysis" class="filter-select" style="width:100%">
+        <option value="">— Ninguno (se usará el más reciente) —</option>
+        ${analysisOptions}
+      </select>
+      <small style="color:var(--text-tertiary); font-size:11px;">Este análisis determina el "Revenue Esperado" del contrato.</small>
+    </div>
+    <div class="form-group">
       <label class="form-label">Notas</label>
       <textarea id="ec-notes" rows="3" style="width:100%;background:var(--surface-2);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--text-primary);padding:8px 12px;font-size:13px;resize:vertical;font-family:inherit">${c.notes || ''}</textarea>
     </div>
@@ -1086,7 +1105,7 @@ window.editContract = async (cid) => {
     const signing_at = document.getElementById('ec-sign').value || null;
     const end_at = document.getElementById('ec-end').value || null;
     const notes = document.getElementById('ec-notes').value.trim() || null;
-    const last_analysis_id = c.last_analysis_id;
+    const last_analysis_id = parseInt(document.getElementById('ec-analysis').value) || null;
     if (!status_id) { alert('Estado es obligatorio'); return false; }
     
     let contract_file_url = c.contract_file_url;
