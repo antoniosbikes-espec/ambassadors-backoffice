@@ -35,28 +35,7 @@ async function init() {
   await loadLists();
   await initTablesDropdown();
 
-  // Rellenar filtros principales...
-  const filterCountry = document.getElementById('amb-filter-country');
-  const filterPlatform = document.getElementById('amb-filter-platform');
-  const filterStatus = document.getElementById('amb-filter-status');
-
-  if (filterCountry) filterCountry.innerHTML = listCodeOptions('country', '— País —');
-  if (filterPlatform) filterPlatform.innerHTML = listCodeOptions('platform', '— Plataforma —');
-  if (filterStatus) filterStatus.innerHTML = listCodeOptions('contract_status', '— Estado —');
-
-  const postFilterPlatform = document.getElementById('posts-filter-platform');
-  const postFilterMention = document.getElementById('posts-filter-mention');
-  if (postFilterPlatform) postFilterPlatform.innerHTML = listCodeOptions('platform', 'Plataforma');
-  if (postFilterMention) postFilterMention.innerHTML = listCodeOptions('mention_type', 'Tipo mención');
-
-  // Rellenar filtros globales...
-  const gCountry = document.getElementById('filter-country');
-  const gNiche = document.getElementById('filter-niche');
-  const gPlatform = document.getElementById('filter-platform');
-
-  if (gCountry) gCountry.innerHTML = listCodeOptions('country', 'Todos los países');
-  if (gNiche) gNiche.innerHTML = listCodeOptions('niche', 'Todos los nichos');
-  if (gPlatform) gPlatform.innerHTML = listCodeOptions('platform', 'Todas las plataformas');
+  updateFilters();
 
   // Listeners para filtros globales
   ['filter-date', 'filter-country', 'filter-niche', 'filter-platform'].forEach(id => {
@@ -210,10 +189,33 @@ function listOptions(name, placeholder = '', selectedValue = null) {
   }).join('');
 }
 
-function listCodeOptions(name, placeholder = '') {
+function listCodeOptions(name, placeholder = '', selectedValue = null) {
   const items = LISTS[name] || [];
   const ph = placeholder ? `<option value="">${placeholder}</option>` : '';
-  return ph + items.map(lv => `<option value="${lv.value}">${lv.value}</option>`).join('');
+  return ph + items.map(lv => {
+    const selected = String(lv.value) === String(selectedValue) ? 'selected' : '';
+    return `<option value="${lv.value}" ${selected}>${lv.value}</option>`;
+  }).join('');
+}
+
+function updateFilters() {
+  const setDropdown = (id, listName, placeholder) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const val = el.value;
+    el.innerHTML = listCodeOptions(listName, placeholder, val);
+  };
+
+  setDropdown('amb-filter-country', 'country', '— País —');
+  setDropdown('amb-filter-platform', 'platform', '— Plataforma —');
+  setDropdown('amb-filter-status', 'contract_status', '— Estado —');
+
+  setDropdown('posts-filter-platform', 'platform', 'Plataforma');
+  setDropdown('posts-filter-mention', 'mention_type', 'Tipo mención');
+
+  setDropdown('filter-country', 'country', 'Todos los países');
+  setDropdown('filter-niche', 'niche', 'Todos los nichos');
+  setDropdown('filter-platform', 'platform', 'Todas las plataformas');
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1131,7 +1133,7 @@ window.editContract = async (cid) => {
   updateDatesVisibility();
 };
 
-async function renderDetailContent() {
+async function renderDetailContent(autoSync = true) {
   const posts = await GET('/posts', { ambassador_id: selectedAmbassadorId }).catch(() => []);
   const container = document.getElementById('content-list');
   const postsHtml = posts.length
@@ -1160,12 +1162,16 @@ async function renderDetailContent() {
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       Registrar post
     </button>
-    <button class="btn-secondary btn-block" id="btn-sync-views" style="margin-top:8px; border-color:var(--accent-purple); color:var(--accent-purple)">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 12c0-4.4 3.6-8 8-8 3.3 0 6.2 2 7.4 4.9M22 12c0 4.4-3.6 8-8 8-3.3 0-6.2-2-7.4-4.9"/></svg>
-      Sincronizar Views (YouTube)
-    </button>
-    <p style="font-size:10px; color:var(--text-tertiary); text-align:center; margin-top:8px;">* Solo disponible para YouTube por ahora</p>
+    <style>@keyframes spin { 100% { transform: rotate(360deg); } }</style>
+    <p id="sync-status" style="font-size:11px; color:var(--text-tertiary); text-align:center; margin-top:12px; display:none;">
+      <span style="display:inline-block;width:10px;height:10px;border:2px solid var(--accent-purple);border-top-color:transparent;border-radius:50%;animation:spin 1s linear infinite;margin-right:4px;vertical-align:middle;"></span>
+      Sincronizando views automáticamente...
+    </p>
     `;
+
+  if (autoSync) {
+    syncPostViews();
+  }
 }
 
 window.deletePost = async (pid) => {
@@ -1223,24 +1229,35 @@ window.editPost = async (pid) => {
 // ── Delegación en tab-content ──────────────────────────────
 document.getElementById('tab-content').addEventListener('click', e => {
   if (e.target.closest('#btn-add-content-detail')) openNewPostModal();
-  if (e.target.closest('#btn-sync-views')) syncPostViews();
 });
 
 async function syncPostViews() {
-  const btn = document.getElementById('btn-sync-views');
-  const originalHtml = btn.innerHTML;
-  btn.disabled = true;
-  btn.innerHTML = 'Sincronizando...';
+  if (window.isSyncingViews) return;
+  window.isSyncingViews = true;
+  
+  const statusEl = document.getElementById('sync-status');
+  if (statusEl) {
+    statusEl.style.display = 'block';
+    statusEl.innerHTML = `<span style="display:inline-block;width:10px;height:10px;border:2px solid var(--accent-purple);border-top-color:transparent;border-radius:50%;animation:spin 1s linear infinite;margin-right:4px;vertical-align:middle;"></span> Sincronizando views automáticamente...`;
+  }
+  
   try {
     const res = await POST('/posts/sync-views');
-    alert(`Sincronización completada. Posts actualizados: ${res.updated_posts || 0}`);
-    await renderDetailContent();
-    await renderDetailOverview();
+    if (document.getElementById('sync-status')) {
+      if (res && res.updated_posts > 0) {
+        document.getElementById('sync-status').innerHTML = `✅ Sincronización completada. ${res.updated_posts} posts actualizados.`;
+        await renderDetailContent(false);
+        await renderDetailOverview();
+      } else {
+        document.getElementById('sync-status').innerHTML = `✅ Views actualizadas.`;
+      }
+    }
   } catch (e) {
-    alert('Error al sincronizar: ' + e.message);
+    if (document.getElementById('sync-status')) {
+      document.getElementById('sync-status').innerHTML = `⚠️ Error al sincronizar views.`;
+    }
   } finally {
-    btn.disabled = false;
-    btn.innerHTML = originalHtml;
+    window.isSyncingViews = false;
   }
 }
 
@@ -1996,6 +2013,7 @@ window.deleteListValue = async (id, listName) => {
   if (!confirm('¿Eliminar este valor del catálogo?')) return;
   await DELETE(`/list_values/${id}`);
   await loadLists();
+  updateFilters();
   renderSettings();
 };
 
@@ -2022,6 +2040,7 @@ window.deleteListValue = async (id, listName) => {
       try {
         await POST('/list_values', { list_id: listId, value, code });
         await loadLists();
+        updateFilters();
         renderSettings();
         return true;
       } catch (e) {
