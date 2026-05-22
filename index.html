@@ -292,7 +292,7 @@
                 <th>País</th>
                 <th>Plataforma</th>
                 <th>Visualizaciones</th>
-                <th>Contenido Score</th>
+                <th>Content Score</th>
                 <th>Estado</th>
               </tr>
             </thead>
@@ -325,6 +325,11 @@
           <select class="filter-select sm" id="amb-filter-platform">
             <option value="">— Plataforma —</option>
           </select>
+          <select class="filter-select sm" id="amb-filter-active">
+            <option value="">— Activos —</option>
+            <option value="all">Todos</option>
+            <option value="0">Inactivos</option>
+          </select>
           <select class="filter-select sm" id="amb-filter-status">
             <option value="">— Estado —</option>
           </select>
@@ -342,6 +347,7 @@
                     <th>Idioma</th>
                     <th>Perfiles</th>
                     <th>Estado contrato</th>
+                    <th>Activo</th>
                   </tr>
                 </thead>
                 <tbody id="ambassadors-body"></tbody>

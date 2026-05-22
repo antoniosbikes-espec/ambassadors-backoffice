@@ -37,14 +37,13 @@ async function init() {
 
   updateFilters();
 
-  // Listeners para filtros globales
+  // Listeners para filtros globales — refresca TODAS las páginas con datos de views
   ['filter-date', 'filter-country', 'filter-niche', 'filter-platform'].forEach(id => {
     document.getElementById(id)?.addEventListener('change', () => {
-      const activePage = document.querySelector('.page.active').id;
-      if (activePage === 'page-dashboard') renderDashboard();
-      if (activePage === 'page-analytics') renderAnalytics();
-      if (activePage === 'page-ambassadors') renderAmbassadors();
-      if (activePage === 'page-posts') renderPosts();
+      renderDashboard();
+      renderAnalytics();
+      renderPosts();
+      renderAmbassadors();
     });
   });
 
@@ -530,14 +529,31 @@ async function renderDashboard() {
   renderTopTable(data.top_ambassadors);
 }
 
-function animateCounter(el, target, format, duration = 900) {
-  let start = 0;
+function animateCounter(el, target, format, duration = 600) {
+  // Cancelar animación anterior si existe
+  if (el._countTimer) { clearInterval(el._countTimer); delete el._countTimer; }
+  // Leer el valor actual del elemento como punto de inicio (soporta subida y bajada)
+  const currentText = el.textContent.replace(/[^0-9.]/g, '');
+  let start = parseFloat(currentText) || 0;
+  if (format === 'compact') {
+    if (el.textContent.includes('M')) start = parseFloat(currentText) * 1_000_000;
+    else if (el.textContent.includes('K')) start = parseFloat(currentText) * 1_000;
+  }
   const step = 16;
-  const inc = target / (duration / step);
-  const timer = setInterval(() => {
-    start = Math.min(start + inc, target);
-    el.textContent = fmt(Math.round(start), format);
-    if (start >= target) clearInterval(timer);
+  const totalSteps = duration / step;
+  const inc = (target - start) / totalSteps;
+  let steps = 0;
+  el._countTimer = setInterval(() => {
+    steps++;
+    start += inc;
+    if (steps >= totalSteps || (inc > 0 && start >= target) || (inc < 0 && start <= target)) {
+      start = target;
+      el.textContent = fmt(Math.round(target), format);
+      clearInterval(el._countTimer);
+      delete el._countTimer;
+    } else {
+      el.textContent = fmt(Math.round(start), format);
+    }
   }, step);
 }
 
@@ -617,12 +633,13 @@ async function renderAmbassadors() {
   filteredAmbassadors = ambassadors;
   const tbody = document.getElementById('ambassadors-body');
   tbody.innerHTML = ambassadors.map(a => `
-    <tr data-id="${a.id}" class="${selectedAmbassadorId === a.id ? 'selected' : ''}">
+    <tr data-id="${a.id}" class="${selectedAmbassadorId === a.id ? 'selected' : ''}" style="${a.is_active === 0 ? 'opacity: 0.6;' : ''}">
       <td><div class="avatar-cell"><div class="table-avatar">${initials(a.first_name + ' ' + (a.last_name || ''))}</div>${a.first_name} ${a.last_name || ''}</div></td>
       <td><span class="badge badge-country">${a.country_value || '—'}</span></td>
       <td><span class="badge badge-lang">${a.language_code || '—'}</span></td>
       <td><strong>${a.profile_count || 0}</strong></td>
       <td>${a.latest_contract_status ? statusBadge(a.latest_contract_status) : '<span style="color:var(--text-tertiary)">—</span>'}</td>
+      <td>${a.is_active === 0 ? '<span class="badge" style="background:var(--danger)">No</span>' : '<span class="badge" style="background:var(--success)">Sí</span>'}</td>
     </tr>
   `).join('');
 
@@ -643,12 +660,14 @@ function buildAmbassadorFilters() {
   const search = document.getElementById('ambassador-search')?.value.trim();
   const country = document.getElementById('amb-filter-country')?.value || document.getElementById('filter-country')?.value;
   const platform = document.getElementById('amb-filter-platform')?.value || document.getElementById('filter-platform')?.value;
+  const active = document.getElementById('amb-filter-active')?.value;
   const status = document.getElementById('amb-filter-status')?.value;
   const niche = document.getElementById('filter-niche')?.value;
 
   if (search) qs.search = search;
   if (country) qs.country_value = country;
   if (platform) qs.platform_value = platform;
+  if (active !== '' && active !== undefined) qs.show_inactive = active === '0' ? '0' : active === 'all' ? '1' : null;
   if (status) qs.status_value = status;
   if (niche) qs.niche_value = niche;
 
@@ -659,6 +678,7 @@ document.getElementById('ambassador-search').addEventListener('input', debounce(
 document.getElementById('amb-filter-country').addEventListener('change', renderAmbassadors);
 document.getElementById('amb-filter-status').addEventListener('change', renderAmbassadors);
 document.getElementById('amb-filter-platform').addEventListener('change', renderAmbassadors);
+document.getElementById('amb-filter-active')?.addEventListener('change', renderAmbassadors);
 
 function debounce(fn, ms) {
   let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
@@ -1109,6 +1129,7 @@ window.editContract = async (cid) => {
     const notes = document.getElementById('ec-notes').value.trim() || null;
     const last_analysis_id = parseInt(document.getElementById('ec-analysis').value) || null;
     if (!status_id) { alert('Estado es obligatorio'); return false; }
+    if (!signing_at) { alert('La fecha de firma es obligatoria'); return false; }
     
     let contract_file_url = c.contract_file_url;
     const pdfFile = document.getElementById('ec-pdf').files[0];
@@ -1440,6 +1461,7 @@ document.getElementById('btn-add-contract').addEventListener('click', async () =
     const end_at = document.getElementById('ac-end').value || null;
     const notes = document.getElementById('ac-notes').value.trim() || null;
     if (!status_id) { alert('Estado es obligatorio'); return false; }
+    if (!signing_at) { alert('La fecha de firma es obligatoria'); return false; }
     
     const pdfFile = document.getElementById('ac-pdf').files[0];
     let contract_file_url = null;
@@ -1531,12 +1553,14 @@ function openNewPostModal() {
 // ─────────────────────────────────────────────────────────────
 async function renderPosts() {
   const qs = {};
+  const days = document.getElementById('filter-date')?.value || '30';
   const search = document.getElementById('posts-search')?.value.trim();
   const platform = document.getElementById('posts-filter-platform')?.value || document.getElementById('filter-platform')?.value;
   const mention = document.getElementById('posts-filter-mention')?.value;
   const country = document.getElementById('filter-country')?.value;
   const niche = document.getElementById('filter-niche')?.value;
-  
+
+  if (days) qs.days = days;
   if (platform) qs.platform_value = platform;
   if (mention) qs.mention_type_value = mention;
   if (country) qs.country_value = country;
@@ -1623,10 +1647,12 @@ async function renderAnalytics() {
 
   // Filtros globales
   const qs = {};
+  const days = document.getElementById('filter-date')?.value || '30';
   const country = document.getElementById('filter-country')?.value;
   const niche = document.getElementById('filter-niche')?.value;
   const platform = document.getElementById('filter-platform')?.value;
 
+  if (days) qs.days = days;
   if (country) qs.country_value = country;
   if (niche) qs.niche_value = niche;
   if (platform) qs.platform_value = platform;

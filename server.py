@@ -530,6 +530,9 @@ def init_db():
         # 5. RPUs
         safe_drop_col('rpus', 'created_at')
 
+        # 6. Ambassadors soft delete
+        safe_add_col('ambassadors', 'is_active', 'INTEGER NOT NULL DEFAULT 1')
+
         # 6. Contracts — asegurar todas las columnas requeridas
         safe_add_col('contracts', 'signing_at', 'TEXT')
         safe_add_col('contracts', 'end_at', 'TEXT')
@@ -1023,7 +1026,7 @@ class Handler(BaseHTTPRequestHandler):
     # ── AMBASSADOR ENDPOINTS ─────────────────────────────────
     def get_ambassadors(self, qs={}):
         sql = """
-            SELECT a.id, a.email, a.first_name, a.last_name, a.primary_language_id, a.country_id, a.created_at,
+            SELECT a.id, a.email, a.first_name, a.last_name, a.primary_language_id, a.country_id, a.created_at, a.is_active,
               lv_lang.value  AS language,
               lv_lang.value   AS language_code,
               lv_country.value AS country,
@@ -1041,6 +1044,15 @@ class Handler(BaseHTTPRequestHandler):
         """
         params = []
         where  = []
+        
+        show_inactive = qs.get('show_inactive', [''])[0]
+        if show_inactive == '1':
+            pass # show all
+        elif show_inactive == '0':
+            where.append('a.is_active = 0')
+        else:
+            where.append('a.is_active = 1')
+
         if qs.get('country_value'):
             where.append('lv_country.value = ?'); params.append(qs['country_value'][0])
         if qs.get('platform_value'):
@@ -1071,7 +1083,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def get_ambassador(self, aid):
         row = self.db.execute("""
-            SELECT a.id, a.email, a.first_name, a.last_name, a.primary_language_id, a.country_id, a.created_at,
+            SELECT a.id, a.email, a.first_name, a.last_name, a.primary_language_id, a.country_id, a.created_at, a.is_active,
               lv_lang.value  AS language, lv_lang.value AS language_code,
               lv_country.value AS country, lv_country.value AS country_value
             FROM ambassadors a
@@ -1105,21 +1117,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def delete_ambassador(self, aid):
         try:
-            self.db.execute("PRAGMA foreign_keys = OFF")
-            self.db.execute("""DELETE FROM daily_views WHERE post_id IN 
-                          (SELECT id FROM posts WHERE profile_id IN 
-                          (SELECT id FROM profiles WHERE ambassador_id=?))""", (aid,))
-            self.db.execute("""DELETE FROM posts WHERE profile_id IN 
-                          (SELECT id FROM profiles WHERE ambassador_id=?)""", (aid,))
-            self.db.execute("""DELETE FROM contracts WHERE profile_id IN 
-                          (SELECT id FROM profiles WHERE ambassador_id=?)""", (aid,))
-            self.db.execute("""DELETE FROM profile_analyses WHERE profile_id IN 
-                          (SELECT id FROM profiles WHERE ambassador_id=?)""", (aid,))
-            self.db.execute("DELETE FROM profiles WHERE ambassador_id=?", (aid,))
-            self.db.execute("DELETE FROM ambassadors WHERE id=?", (aid,))
+            self.db.execute("UPDATE ambassadors SET is_active=0 WHERE id=?", (aid,))
             self.db.commit()
-            self.db.execute("PRAGMA foreign_keys = ON")
-            self.send_json({'deleted': aid})
+            self.send_json({'deleted': aid, 'soft': True})
         except Exception as e:
             self.db.rollback()
             self.send_err(str(e), 500)
@@ -1313,6 +1313,8 @@ class Handler(BaseHTTPRequestHandler):
         body = self.read_body()
         profile_id = body.get('profile_id')
         last_analysis_id = body.get('last_analysis_id')
+        if not body.get('signing_at'):
+            return self.send_err('La fecha de firma es obligatoria', 400)
 
         # Si no viene análisis, intentamos buscar el más reciente del perfil
         if not last_analysis_id:
@@ -1337,6 +1339,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def update_contract(self, cid):
         body = self.read_body()
+        if not body.get('signing_at'):
+            return self.send_err('La fecha de firma es obligatoria', 400)
         print(f"[CONTRACT UPDATE] id={cid} notes={repr(body.get('notes'))} body_keys={list(body.keys())}", flush=True)
         self.db.execute("""UPDATE contracts SET status_id=?,currency_id=?,
               price_per_standard_post=?,price_per_top_post=?,
@@ -1364,13 +1368,18 @@ class Handler(BaseHTTPRequestHandler):
 
     # ── POST ENDPOINTS ───────────────────────────────────────
     def get_posts(self, qs={}):
-        sql = """
+        days = qs.get('days', [''])[0]
+        if days:
+            views_cond = f"AND dv.views_date >= date('now', '-{days} days')"
+        else:
+            views_cond = ''
+        sql = f"""
             SELECT po.*,
               lv_mt.value AS mention_type, lv_mt.value AS mention_type_value,
               p.handle, p.ambassador_id,
               a.first_name || ' ' || COALESCE(a.last_name,'') AS ambassador_name,
               lv_plat.value AS platform, lv_plat.value AS platform_value,
-              COALESCE(SUM(dv.new_views),0) AS total_views
+              COALESCE(SUM(CASE WHEN dv.id IS NOT NULL {views_cond} THEN dv.new_views ELSE 0 END),0) AS total_views
             FROM posts po
             JOIN profiles p ON p.id = po.profile_id
             JOIN ambassadors a ON a.id = p.ambassador_id
