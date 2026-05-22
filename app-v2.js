@@ -525,7 +525,7 @@ async function renderDashboard() {
   if (deltaEl) deltaEl.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="${delta >= 0 ? '18 15 12 9 6 15' : '6 9 12 15 18 9'}"/></svg> Δ ${delta >= 0 ? '+' : ''}${delta}%`;
 
   // Charts
-  renderViewsTrend(data.views_trend);
+  renderViewsTrend(data.views_trend, parseInt(days));
   renderPlatformSplit(data.platform_split);
   renderTopTable(data.top_ambassadors);
 }
@@ -541,14 +541,14 @@ function animateCounter(el, target, format, duration = 900) {
   }, step);
 }
 
-function renderViewsTrend(trend) {
+function renderViewsTrend(trend, days = 30) {
   destroyChart('views');
   const ctx = document.getElementById('canvas-views');
   if (!ctx) return;
-  // Fill last 30 days with API data or zeros
+  // Fill last N days with API data or zeros
   const labels = [], values = [];
   const now = new Date();
-  for (let i = 29; i >= 0; i--) {
+  for (let i = days - 1; i >= 0; i--) {
     const d = new Date(now); d.setDate(d.getDate() - i);
     const key = d.toISOString().slice(0, 10);
     labels.push(d.toLocaleDateString('es-ES', { month: 'short', day: 'numeric' }));

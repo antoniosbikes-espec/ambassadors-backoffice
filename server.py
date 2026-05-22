@@ -9,7 +9,7 @@ VERSION = "1.0.5 - Clean Migrations"
 print(f"--- SERVER VERSION: {VERSION} ---")
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from urllib.parse import urlparse, parse_qs
 from threading import Lock
 
@@ -687,15 +687,17 @@ class Handler(BaseHTTPRequestHandler):
         try:
             print("[Sync] Iniciando sincronización de visualizaciones reales...")
             posts = self.db.execute("""
-                SELECT po.id, po.url, lv.value as platform_value 
+                SELECT po.id, po.url, po.published_at, lv.value as platform_value 
                 FROM posts po
                 JOIN profiles p ON p.id = po.profile_id
                 JOIN list_values lv ON lv.id = p.platform_id
             """).fetchall()
             
             updated = 0
-            # Usar la fecha actual del servidor (YYYY-MM-DD)
-            today_str = datetime.now().strftime('%Y-%m-%d')
+            # Usar la fecha actual del servidor (YYYY-MM-DD) sin hora para cálculos
+            now = datetime.now()
+            today_str = now.strftime('%Y-%m-%d')
+            today_date = datetime.strptime(today_str, '%Y-%m-%d')
             
             for p in posts:
                 real_v = self.fetch_real_views(p['platform_value'], p['url'])
@@ -706,25 +708,64 @@ class Handler(BaseHTTPRequestHandler):
                     if real_v > last_v:
                         diff = real_v - last_v
                         
-                        # Si es un post antiguo que acabamos de añadir y no tiene histórico, 
-                        # pero ya tiene muchas visitas, NO queremos meterlas todas hoy.
-                        # Pero el usuario quiere ver "algo". 
-                        # Si last_v es 0, guardamos el total actual pero como base inicial.
+                        # Buscar la última fecha registrada para este post
+                        last_date_row = self.db.execute("SELECT MAX(views_date) FROM daily_views WHERE post_id=?", (p['id'],)).fetchone()
+                        last_date_str = last_date_row[0] if last_date_row else None
                         
-                        # Aseguramos que existe el registro para hoy
-                        exists = self.db.execute("SELECT id FROM daily_views WHERE post_id=? AND views_date=?", (p['id'], today_str)).fetchone()
-                        if not exists:
-                            self.db.execute("INSERT INTO daily_views (post_id, new_views, views_date) VALUES (?, ?, ?)", (p['id'], diff, today_str))
+                        start_date = None
+                        if last_date_str:
+                            start_date = datetime.strptime(last_date_str, '%Y-%m-%d')
+                        elif p['published_at']:
+                            # Si no hay histórico, intentamos usar la fecha de publicación como referencia
+                            try:
+                                start_date = datetime.strptime(p['published_at'][:10], '%Y-%m-%d')
+                            except:
+                                pass
+                        
+                        if start_date:
+                            # Calculamos cuántos días han pasado desde la última actualización
+                            delta = (today_date - start_date).days
+                            
+                            if delta > 0:
+                                # Distribuimos los nuevos views entre los días transcurridos
+                                views_per_day = diff // delta
+                                remainder = diff % delta
+                                
+                                for i in range(1, delta + 1):
+                                    curr_date = (start_date + timedelta(days=i)).strftime('%Y-%m-%d')
+                                    # El remanente se suma al último día (hoy) para cuadrar el total
+                                    day_diff = views_per_day + (remainder if i == delta else 0)
+                                    
+                                    if day_diff > 0:
+                                        exists = self.db.execute("SELECT id FROM daily_views WHERE post_id=? AND views_date=?", (p['id'], curr_date)).fetchone()
+                                        if not exists:
+                                            self.db.execute("INSERT INTO daily_views (post_id, new_views, views_date) VALUES (?, ?, ?)", (p['id'], day_diff, curr_date))
+                                        else:
+                                            self.db.execute("UPDATE daily_views SET new_views = new_views + ? WHERE post_id=? AND views_date=?", (day_diff, p['id'], curr_date))
+                            else:
+                                # Delta <= 0: ya hay registro hoy o es la misma fecha de inicio, sumamos al registro de hoy
+                                exists = self.db.execute("SELECT id FROM daily_views WHERE post_id=? AND views_date=?", (p['id'], today_str)).fetchone()
+                                if not exists:
+                                    self.db.execute("INSERT INTO daily_views (post_id, new_views, views_date) VALUES (?, ?, ?)", (p['id'], diff, today_str))
+                                else:
+                                    self.db.execute("UPDATE daily_views SET new_views = new_views + ? WHERE post_id=? AND views_date=?", (diff, p['id'], today_str))
                         else:
-                            self.db.execute("UPDATE daily_views SET new_views = new_views + ? WHERE post_id=? AND views_date=?", (diff, p['id'], today_str))
+                            # Sin fecha de referencia alguna, todo a hoy
+                            exists = self.db.execute("SELECT id FROM daily_views WHERE post_id=? AND views_date=?", (p['id'], today_str)).fetchone()
+                            if not exists:
+                                self.db.execute("INSERT INTO daily_views (post_id, new_views, views_date) VALUES (?, ?, ?)", (p['id'], diff, today_str))
+                            else:
+                                self.db.execute("UPDATE daily_views SET new_views = new_views + ? WHERE post_id=? AND views_date=?", (diff, p['id'], today_str))
                         
                         updated += 1
             
             self.db.commit()
             self.send_json({"status": "success", "updated_posts": updated, "date": today_str})
         except Exception as e:
+            import traceback; traceback.print_exc()
             print(f"[Sync] Error: {e}")
             self.send_err(f"Error al sincronizar: {e}", 500)
+
 
     def do_POST(self): self.handle_method('POST')
     def do_PUT(self):  self.handle_method('PUT')
@@ -1531,7 +1572,7 @@ class Handler(BaseHTTPRequestHandler):
         def build_where(extra_conditions=[]):
             all_conds = where_parts + extra_conditions
             if not all_conds: return "", []
-            return " WHERE " + " AND ".join(all_conds), params + [c[1] for c in extra_conditions if isinstance(c, tuple)]
+            return " WHERE " + " AND ".join(all_conds), []
         
         # 1. KPIs principales
         w_sql, w_params = build_where()
@@ -1698,14 +1739,15 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 real_revenue += 0
         
-        # Views totales
-        w_sql_v, _ = build_where()
+        # Views totales (filtradas por el rango de días seleccionado)
+        views_conds = ["dv.views_date >= date('now', ?)"]
+        w_sql_v, _ = build_where(views_conds)
         total_views = self.db.execute(f"""
             SELECT COALESCE(SUM(dv.new_views),0) {base_from}
             JOIN posts po ON po.profile_id = p.id
             JOIN daily_views dv ON dv.post_id = po.id
             {w_sql_v}
-        """, params).fetchone()[0] or 0
+        """, params + [f'-{days} days']).fetchone()[0] or 0
 
         # 2. Tendencia de Views
         trend_conds = ["dv.views_date >= date('now', ?)"]
