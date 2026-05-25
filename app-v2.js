@@ -1167,6 +1167,10 @@ async function renderDetailContent(autoSync = true) {
             <div class="profile-stats">${fmt(p.total_views || 0, 'compact')} views · Score: ${Number(p.content_score || 0).toFixed(2)}</div>
           </div>
           <div class="header-actions" style="margin-left: auto;">
+            <button class="btn-icon" onclick="openAddViewsModal(${p.id})" title="Añadir views" style="color:var(--accent-teal);font-size:10px;padding:4px 8px;gap:3px;display:inline-flex;align-items:center;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="1" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="23"/><line x1="1" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="23" y2="12"/></svg>
+              +Views
+            </button>
             <button class="btn-icon" onclick="editPost(${p.id})" title="Editar">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             </button>
@@ -1194,6 +1198,51 @@ async function renderDetailContent(autoSync = true) {
     syncPostViews();
   }
 }
+
+// ── Añadir Views a un post ────────────────────────────────
+window.openAddViewsModal = (postId) => {
+  const today = new Date().toISOString().slice(0, 10);
+  openModal('Añadir views al post', `
+    <div class="form-group">
+      <label class="form-label">Post ID</label>
+      <input type="number" id="av-post-id" value="${postId}" readonly
+        style="background:var(--surface-2);opacity:0.6;cursor:not-allowed;" />
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Fecha *</label>
+        <input type="date" id="av-date" value="${today}" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nuevas views *</label>
+        <input type="number" id="av-views" placeholder="0" min="0" />
+      </div>
+    </div>
+    <p style="font-size:11px;color:var(--text-tertiary);margin-top:4px;">
+      Si ya existe un registro para esa fecha, se reemplazará con el valor indicado.
+    </p>
+  `, async () => {
+    const post_id = parseInt(document.getElementById('av-post-id').value);
+    const views_date = document.getElementById('av-date').value;
+    const new_views = parseInt(document.getElementById('av-views').value);
+    if (!views_date) { alert('La fecha es obligatoria'); return false; }
+    if (isNaN(new_views) || new_views < 0) { alert('Introduce un número de views válido'); return false; }
+    try {
+      await POST('/post_views', { post_id, views_date, new_views });
+      // Refrescar la vista activa
+      if (document.getElementById('page-posts')?.style.display !== 'none') {
+        await renderPosts();
+      } else if (selectedAmbassadorId) {
+        await renderDetailContent(false);
+        await renderDetailOverview();
+      }
+      return true;
+    } catch (e) {
+      alert('Error al guardar views: ' + e.message);
+      return false;
+    }
+  });
+};
 
 window.deletePost = async (pid) => {
   if (!confirm('¿Eliminar este post?')) return;
@@ -1581,6 +1630,13 @@ async function renderPosts() {
       <td><strong>${fmt(p.total_views || 0, 'compact')}</strong></td>
       <td>${scoreBar(p.content_score)}</td>
       <td><a href="${p.url}" target="_blank" class="btn-link" style="font-size:12px">Ver ↗</a></td>
+      <td>
+        <button class="btn-icon" onclick="openAddViewsModal(${p.id})" title="Añadir views"
+          style="color:var(--accent-teal);font-size:10px;padding:4px 8px;gap:3px;display:inline-flex;align-items:center;white-space:nowrap;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="1" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="23"/><line x1="1" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="23" y2="12"/></svg>
+          +Views
+        </button>
+      </td>
     </tr>
   `).join('');
   document.getElementById('posts-count').textContent = `${filtered.length} posts`;
