@@ -1489,11 +1489,9 @@ class Handler(BaseHTTPRequestHandler):
     def get_revenues(self, qs={}):
         rows = self.db.execute("""
             SELECT r.*, lv_c.value AS country, lv_c.value AS country_value,
-              lv_n.value AS niche, lv_n.value AS niche_value,
               lv_cur.value AS currency, lv_cur.value AS currency_value
             FROM revenues r
             LEFT JOIN list_values lv_c   ON lv_c.id   = r.country_id
-            LEFT JOIN list_values lv_n   ON lv_n.id   = r.niche_id
             LEFT JOIN list_values lv_cur ON lv_cur.id = r.currency_id
             ORDER BY r.views_date DESC
         """).fetchall()
