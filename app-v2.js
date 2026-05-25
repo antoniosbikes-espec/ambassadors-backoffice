@@ -1916,11 +1916,12 @@ function renderRpuTable(rows) {
   `).join('');
 }
 
-window.deleteRevenue = async (id) => { if(confirm('¿Eliminar este registro?')) { await DELETE(`/revenues/${id}`); renderRevenue(); } };
-window.deleteRpu    = async (id) => { if(confirm('¿Seguro?'))                 { await DELETE(`/rpus/${id}`);     renderRevenue(); } };
+window.deleteRevenue = async (id) => { if(confirm('¿Eliminar este registro?')) { await DELETE(`/revenues/${id}`); await renderRevenue(); } };
+window.deleteRpu    = async (id) => { if(confirm('¿Seguro?'))                 { await DELETE(`/rpus/${id}`);     await renderRevenue(); } };
 
 window.editRevenue = async (id) => {
-  const r = (await GET('/revenues')).find(x => x.id === id);
+  const list = await GET('/revenues');
+  const r = list.find(x => x.id == id);
   if (!r) return;
   openModal('Editar Revenue Real', `
     <div class="form-group"><label class="form-label">Fecha</label><input type="date" id="erv-date" value="${r.views_date}" /></div>
@@ -1934,32 +1935,36 @@ window.editRevenue = async (id) => {
     const country_id  = parseInt(document.getElementById('erv-country').value) || null;
     const currency_id = parseInt(document.getElementById('erv-currency').value) || null;
     const new_revenue = parseFloat(document.getElementById('erv-amount').value) || 0;
-    await PUT(`/revenues/${id}`, { views_date, country_id, currency_id, new_revenue });
-    renderRevenue();
-    return true;
+    try {
+      await PUT(`/revenues/${id}`, { views_date, country_id, currency_id, new_revenue });
+      await renderRevenue();
+      return true;
+    } catch(e) { alert('Error al guardar: ' + e.message); return false; }
   });
 };
 
 window.editRpu = async (id) => {
-  const r = (await GET('/rpus')).find(x => x.id === id);
+  const list = await GET('/rpus');
+  const r = list.find(x => x.id == id);
   if (!r) return;
   
   openModal('Editar RPU', `
     <div class="form-group"><label class="form-label">Fecha</label><input type="date" id="erpu-date" value="${r.views_date}" /></div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">País</label><select id="erpu-country" class="filter-select" style="width:100%">${listOptions('country', '', r.country_id)}</select></div>
+      <div class="form-group"><label class="form-label">País</label><select id="erpu-country" class="filter-select" style="width:100%"><option value="">— N/A —</option>${listOptions('country', '', r.country_id)}</select></div>
       <div class="form-group"><label class="form-label">Nicho</label><select id="erpu-niche" class="filter-select" style="width:100%">${listOptions('niche', '', r.niche_id)}</select></div>
     </div>
     <div class="form-group"><label class="form-label">RPU (€/view)</label><input type="number" id="erpu-val" value="${r.rpu}" step="0.0001" /></div>
   `, async () => {
     const views_date = document.getElementById('erpu-date').value;
-    const country_id = parseInt(document.getElementById('erpu-country').value);
-    const niche_id = parseInt(document.getElementById('erpu-niche').value);
+    const country_id = parseInt(document.getElementById('erpu-country').value) || null;
+    const niche_id   = parseInt(document.getElementById('erpu-niche').value) || null;
     const rpu = parseFloat(document.getElementById('erpu-val').value) || 0;
-    
-    await PUT(`/rpus/${id}`, { views_date, country_id, niche_id, rpu });
-    renderRevenue();
-    return true;
+    try {
+      await PUT(`/rpus/${id}`, { views_date, country_id, niche_id, rpu });
+      await renderRevenue();
+      return true;
+    } catch(e) { alert('Error al guardar: ' + e.message); return false; }
   });
 };
 
