@@ -2013,7 +2013,7 @@ document.getElementById('btn-add-revenue').addEventListener('click', () => {
   openModal('Añadir Revenue Real', `
     <div class="form-row">
       <div class="form-group"><label class="form-label">Fecha</label><input type="date" id="rv-date" value="${new Date().toISOString().slice(0, 10)}" /></div>
-      <div class="form-group"><label class="form-label">País</label><select id="rv-country" class="filter-select" style="width:100%;padding-right:28px">${listOptions('country')}</select></div>
+      <div class="form-group"><label class="form-label">País</label><select id="rv-country" class="filter-select" style="width:100%;padding-right:28px"><option value="">— N/A —</option>${listOptions('country')}</select></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Nicho</label><select id="rv-niche" class="filter-select" style="width:100%;padding-right:28px"><option value="">— Sin nicho —</option>${listOptions('niche')}</select></div>
@@ -2024,7 +2024,7 @@ document.getElementById('btn-add-revenue').addEventListener('click', () => {
     try {
       await POST('/revenues', {
         views_date: document.getElementById('rv-date').value,
-        country_id: parseInt(document.getElementById('rv-country').value),
+        country_id: parseInt(document.getElementById('rv-country').value) || null,
         niche_id: parseInt(document.getElementById('rv-niche').value) || null,
         currency_id: parseInt(document.getElementById('rv-currency').value) || null,
         new_revenue: parseFloat(document.getElementById('rv-new_revenue').value) || 0,
