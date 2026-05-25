@@ -1879,11 +1879,19 @@ async function renderRevenue() {
 function renderRevenueTable(rows) {
   document.getElementById('revenue-body').innerHTML = (rows || []).map(r => `
     <tr>
+      <td style="color:var(--text-tertiary);font-size:11px">#${r.id}</td>
       <td>${r.views_date}</td>
-      <td><span class="badge badge-country">${r.country_value || r.country || '—'}</span></td>
-      <td><span class="badge badge-lang" style="background:var(--accent-purple-alpha)">${r.niche_value || r.niche || '—'}</span></td>
+      <td><span class="badge badge-country">${r.country_value || r.country || '— N/A —'}</span></td>
+      <td><span class="badge badge-lang" style="background:var(--accent-purple-alpha)">${r.currency_value || r.currency || '—'}</span></td>
       <td><strong style="color:var(--accent-teal)">${fmt(r.new_revenue, 'currency')}</strong></td>
-      <td><button class="btn-icon" style="width:auto;padding:4px 10px;font-size:11px" onclick="deleteRevenue(${r.id})">Eliminar</button></td>
+      <td style="display:flex;gap:4px;align-items:center">
+        <button class="btn-icon" onclick="editRevenue(${r.id})" title="Editar" style="color:var(--accent-teal)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="btn-icon" onclick="deleteRevenue(${r.id})" style="color:var(--danger)" title="Eliminar">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+        </button>
+      </td>
     </tr>
   `).join('');
 }
@@ -1891,12 +1899,13 @@ function renderRevenueTable(rows) {
 function renderRpuTable(rows) {
   document.getElementById('rpu-body').innerHTML = (rows || []).map(r => `
     <tr>
+      <td style="color:var(--text-tertiary);font-size:11px">#${r.id}</td>
       <td>${r.views_date}</td>
-      <td><span class="badge badge-country">${r.country_value || '—'}</span></td>
+      <td><span class="badge badge-country">${r.country_value || '— N/A —'}</span></td>
       <td><span class="badge badge-lang">${r.niche_value || '—'}</span></td>
       <td><strong style="color:var(--accent-purple)">€${Number(r.rpu || 0).toFixed(4)}</strong></td>
-      <td>
-        <button class="btn-icon" onclick="editRpu(${r.id})" title="Editar RPU">
+      <td style="display:flex;gap:4px;align-items:center">
+        <button class="btn-icon" onclick="editRpu(${r.id})" title="Editar RPU" style="color:var(--accent-teal)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
         </button>
         <button class="btn-icon" onclick="deleteRpu(${r.id})" style="color:var(--danger)" title="Eliminar RPU">
@@ -1907,8 +1916,29 @@ function renderRpuTable(rows) {
   `).join('');
 }
 
-window.deleteRevenue = async (id) => { await DELETE(`/revenues/${id}`); renderRevenue(); };
-window.deleteRpu = async (id) => { if(confirm('¿Seguro?')) { await DELETE(`/rpus/${id}`); renderRevenue(); } };
+window.deleteRevenue = async (id) => { if(confirm('¿Eliminar este registro?')) { await DELETE(`/revenues/${id}`); renderRevenue(); } };
+window.deleteRpu    = async (id) => { if(confirm('¿Seguro?'))                 { await DELETE(`/rpus/${id}`);     renderRevenue(); } };
+
+window.editRevenue = async (id) => {
+  const r = (await GET('/revenues')).find(x => x.id === id);
+  if (!r) return;
+  openModal('Editar Revenue Real', `
+    <div class="form-group"><label class="form-label">Fecha</label><input type="date" id="erv-date" value="${r.views_date}" /></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">País</label><select id="erv-country" class="filter-select" style="width:100%"><option value="">— N/A —</option>${listOptions('country', '', r.country_id)}</select></div>
+      <div class="form-group"><label class="form-label">Moneda</label><select id="erv-currency" class="filter-select" style="width:100%">${listOptions('currency', '', r.currency_id)}</select></div>
+    </div>
+    <div class="form-group"><label class="form-label">Importe</label><input type="number" id="erv-amount" value="${r.new_revenue}" step="0.01" min="0" /></div>
+  `, async () => {
+    const views_date  = document.getElementById('erv-date').value;
+    const country_id  = parseInt(document.getElementById('erv-country').value) || null;
+    const currency_id = parseInt(document.getElementById('erv-currency').value) || null;
+    const new_revenue = parseFloat(document.getElementById('erv-amount').value) || 0;
+    await PUT(`/revenues/${id}`, { views_date, country_id, currency_id, new_revenue });
+    renderRevenue();
+    return true;
+  });
+};
 
 window.editRpu = async (id) => {
   const r = (await GET('/rpus')).find(x => x.id === id);

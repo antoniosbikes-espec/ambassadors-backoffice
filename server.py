@@ -946,6 +946,7 @@ class Handler(BaseHTTPRequestHandler):
             if path == '/api/revenues' and method == 'POST':
                 return self.create_revenue()
             pid = path_id('/api/revenues')
+            if pid and method == 'PUT':    return self.update_revenue(pid)
             if pid and method == 'DELETE': return self.delete_revenue(pid)
 
             # ── /api/rpus ────────────────────────────────────
@@ -1511,6 +1512,15 @@ class Handler(BaseHTTPRequestHandler):
         self.db.execute("DELETE FROM revenues WHERE id=?", (rid,))
         self.db.commit()
         self.send_json({'deleted': rid})
+
+    def update_revenue(self, rid):
+        body = self.read_body()
+        self.db.execute("""
+            UPDATE revenues SET views_date=?, country_id=?, currency_id=?, new_revenue=?
+            WHERE id=?
+        """, (body.get('views_date'), body.get('country_id'), body.get('currency_id'), body.get('new_revenue', 0), rid))
+        self.db.commit()
+        self.send_json({'updated': rid})
 
     # ── RPUS ─────────────────────────────────────────────────
     def get_rpus(self, qs={}):
