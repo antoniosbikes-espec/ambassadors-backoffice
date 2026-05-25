@@ -959,18 +959,6 @@ class Handler(BaseHTTPRequestHandler):
                 if method == 'PUT':    return self.update_rpu(pid)
                 if method == 'DELETE': return self.delete_rpu(pid)
 
-            # ── /api/sql-script (TEMPORAL) ────────────────────
-            if path == '/api/sql-script' and method == 'POST':
-                body = self.read_body()
-                if 'query' in body:
-                    cur = self.db.execute(body.get('query'))
-                    self.db.commit()
-                    rows = cur.fetchall()
-                    return self.send_json(rows_to_list(rows) if rows else {'status': 'ok'})
-                else:
-                    self.db.executescript(body.get('script'))
-                    return self.send_json({'status': 'ok'})
-
             # ── /api/dashboard ──────────────────────────────
             if path == '/api/dashboard' and method == 'GET':
                 return self.get_dashboard(qs)
