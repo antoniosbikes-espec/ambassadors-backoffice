@@ -962,8 +962,14 @@ class Handler(BaseHTTPRequestHandler):
             # ── /api/sql-script (TEMPORAL) ────────────────────
             if path == '/api/sql-script' and method == 'POST':
                 body = self.read_body()
-                self.db.executescript(body.get('script'))
-                return self.send_json({'status': 'ok'})
+                if 'query' in body:
+                    cur = self.db.execute(body.get('query'))
+                    self.db.commit()
+                    rows = cur.fetchall()
+                    return self.send_json(rows_to_list(rows) if rows else {'status': 'ok'})
+                else:
+                    self.db.executescript(body.get('script'))
+                    return self.send_json({'status': 'ok'})
 
             # ── /api/dashboard ──────────────────────────────
             if path == '/api/dashboard' and method == 'GET':
