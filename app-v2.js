@@ -163,6 +163,10 @@ async function loadLists() {
       if (!LISTS[key]) LISTS[key] = [];
       LISTS[key].push(item);
     });
+    // Garantizar orden alfabético por value en cada lista
+    Object.keys(LISTS).forEach(k => {
+      LISTS[k].sort((a, b) => (a.value || '').localeCompare(b.value || '', 'es', { sensitivity: 'base' }));
+    });
     console.log("✅ LISTS poblado correctamente:", LISTS);
   } catch (err) {
     console.error("❌ Error cargando listas:", err);
@@ -2116,10 +2120,12 @@ function renderSettings() {
   categories.forEach(({ key, listId }) => {
     const ul = document.getElementById(listId);
     if (!ul) return;
-    const items = LISTS[key] || [];
+    const items = [...(LISTS[key] || [])].sort((a, b) =>
+      (a.value || '').localeCompare(b.value || '', 'es', { sensitivity: 'base' })
+    );
     ul.innerHTML = items.map(lv => `
       <li>
-        <span>${lv.value}${lv.value ? ` <small style="color:var(--text-tertiary)">(${lv.value})</small>` : ''}</span>
+        <span>${lv.value}${lv.code ? ` <small style="color:var(--text-tertiary)">(${lv.code})</small>` : ''}</span>
         <button onclick="deleteListValue(${lv.id}, '${key}')">Eliminar</button>
       </li>
     `).join('') || '<li style="color:var(--text-tertiary);font-size:12px;padding:8px 0">Sin valores</li>';
