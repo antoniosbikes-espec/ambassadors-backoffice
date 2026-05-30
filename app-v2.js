@@ -1235,7 +1235,7 @@ window.editContract = async (cid) => {
   updateDatesVisibility();
 };
 
-async function renderDetailContent(autoSync = true) {
+async function renderDetailContent() {
   const posts = await GET('/posts', { ambassador_id: selectedAmbassadorId }).catch(() => []);
   const container = document.getElementById('content-list');
   const postsHtml = posts.length
@@ -1268,16 +1268,7 @@ async function renderDetailContent(autoSync = true) {
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       Registrar post
     </button>
-    <style>@keyframes spin { 100% { transform: rotate(360deg); } }</style>
-    <p id="sync-status" style="font-size:11px; color:var(--text-tertiary); text-align:center; margin-top:12px; display:none;">
-      <span style="display:inline-block;width:10px;height:10px;border:2px solid var(--accent-purple);border-top-color:transparent;border-radius:50%;animation:spin 1s linear infinite;margin-right:4px;vertical-align:middle;"></span>
-      Sincronizando views automáticamente...
-    </p>
     `;
-
-  if (autoSync) {
-    syncPostViews();
-  }
 }
 
 // ── Añadir Views a un post ────────────────────────────────
@@ -1390,35 +1381,6 @@ document.getElementById('tab-content').addEventListener('click', e => {
   if (e.target.closest('#btn-add-content-detail')) openNewPostModal();
 });
 
-async function syncPostViews() {
-  if (window.isSyncingViews) return;
-  window.isSyncingViews = true;
-  
-  const statusEl = document.getElementById('sync-status');
-  if (statusEl) {
-    statusEl.style.display = 'block';
-    statusEl.innerHTML = `<span style="display:inline-block;width:10px;height:10px;border:2px solid var(--accent-purple);border-top-color:transparent;border-radius:50%;animation:spin 1s linear infinite;margin-right:4px;vertical-align:middle;"></span> Sincronizando views automáticamente...`;
-  }
-  
-  try {
-    const res = await POST('/posts/sync-views');
-    if (document.getElementById('sync-status')) {
-      if (res && res.updated_posts > 0) {
-        document.getElementById('sync-status').innerHTML = `✅ Sincronización completada. ${res.updated_posts} posts actualizados.`;
-        await renderDetailContent(false);
-        await renderDetailOverview();
-      } else {
-        document.getElementById('sync-status').innerHTML = `✅ Views actualizadas.`;
-      }
-    }
-  } catch (e) {
-    if (document.getElementById('sync-status')) {
-      document.getElementById('sync-status').innerHTML = `⚠️ Error al sincronizar views.`;
-    }
-  } finally {
-    window.isSyncingViews = false;
-  }
-}
 
 // ─────────────────────────────────────────────────────────────
 // AMBASSADOR — ADD BUTTONS
