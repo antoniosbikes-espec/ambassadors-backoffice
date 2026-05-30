@@ -1345,7 +1345,7 @@ class Handler(BaseHTTPRequestHandler):
             where.append('lv_plat.value=?'); params.append(qs['platform_value'][0])
         if where:
             sql += ' WHERE ' + ' AND '.join(where)
-        sql += ' ORDER BY c.created_at DESC'
+        sql += ' ORDER BY CASE WHEN c.end_at IS NULL THEN 1 ELSE 0 END, c.end_at ASC'
         rows = self.db.execute(sql, params).fetchall()
         self.send_json(rows_to_list(rows))
 

@@ -105,6 +105,16 @@
         </svg>
         <span>Revenue</span>
       </a>
+      <a href="#contracts" class="nav-item" data-page="contracts" id="nav-contracts">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="8" y1="13" x2="16" y2="13"/>
+          <line x1="8" y1="17" x2="12" y2="17"/>
+          <path d="M9 3H6a2 2 0 0 0-2 2v1"/>
+        </svg>
+        <span>Contratos</span>
+      </a>
       <div class="nav-divider"></div>
       <a href="#settings" class="nav-item" data-page="settings" id="nav-settings">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -629,6 +639,38 @@
               <tbody id="rpu-body"></tbody>
             </table>
           </div>
+        </div>
+      </section>
+
+      <!-- CONTRACTS PAGE -->
+      <section class="page" id="page-contracts">
+        <div class="page-header">
+          <h1>Contratos</h1>
+          <p class="page-subtitle">Todos los contratos ordenados por fecha de finalización</p>
+        </div>
+        <div class="table-container">
+          <table class="data-table" id="contracts-table">
+            <thead>
+              <tr>
+                <th>Embajador</th>
+                <th>Canal</th>
+                <th>Plataforma</th>
+                <th>Estado</th>
+                <th>Firma</th>
+                <th>Finalización</th>
+                <th>Días restantes</th>
+                <th>Posts/mes</th>
+                <th>Precio std</th>
+                <th>Precio top</th>
+                <th>Moneda</th>
+                <th>Revenue anual est.</th>
+                <th>Notas</th>
+              </tr>
+            </thead>
+            <tbody id="contracts-body">
+              <tr><td colspan="13" style="text-align:center;color:var(--text-tertiary);padding:32px">Cargando...</td></tr>
+            </tbody>
+          </table>
         </div>
       </section>
 

@@ -286,7 +286,7 @@ function navigateTo(page) {
   document.getElementById('breadcrumb-text').textContent =
     {
       dashboard: 'Dashboard', ambassadors: 'Ambassadors', posts: 'Posts',
-      analytics: 'Analytics', revenue: 'Revenue', settings: 'Settings'
+      analytics: 'Analytics', revenue: 'Revenue', settings: 'Settings', contracts: 'Contratos'
     }[page] || page;
   if (page === 'dashboard') renderDashboard();
   if (page === 'ambassadors') renderAmbassadors();
@@ -294,6 +294,7 @@ function navigateTo(page) {
   if (page === 'analytics') renderAnalytics();
   if (page === 'revenue') renderRevenue();
   if (page === 'settings') renderSettings();
+  if (page === 'contracts') renderContracts();
   if (page.startsWith('db-table:')) {
     const tableName = page.split(':')[1];
     renderDbTable(tableName);
@@ -658,6 +659,57 @@ async function renderAmbassadors() {
   });
 
   if (selectedAmbassadorId) await openAmbassadorDetail(selectedAmbassadorId);
+}
+
+async function renderContracts() {
+  const tbody = document.getElementById('contracts-body');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:var(--text-tertiary);padding:32px">Cargando...</td></tr>';
+
+  const contracts = await GET('/contracts').catch(() => []);
+
+  if (!contracts.length) {
+    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:var(--text-tertiary);padding:32px">No hay contratos registrados</td></tr>';
+    return;
+  }
+
+  const today = new Date();
+  today.setHours(0,0,0,0);
+
+  tbody.innerHTML = contracts.map(c => {
+    // Días restantes
+    let daysLeft = null;
+    let daysCell = '<span style="color:var(--text-tertiary)">—</span>';
+    if (c.end_at) {
+      const end = new Date(c.end_at);
+      end.setHours(0,0,0,0);
+      daysLeft = Math.round((end - today) / (1000 * 60 * 60 * 24));
+      const color = daysLeft < 0 ? 'var(--danger)'
+                  : daysLeft < 30 ? 'var(--danger)'
+                  : daysLeft < 90 ? 'var(--warning, #f97316)'
+                  : 'var(--success)';
+      const label = daysLeft < 0 ? `Vencido (${Math.abs(daysLeft)}d)` : `${daysLeft}d`;
+      daysCell = `<strong style="color:${color}">${label}</strong>`;
+    }
+
+    const postsMonth = (c.monthly_standard_posts || 0) + (c.monthly_top_posts ? ` + ${c.monthly_top_posts} top` : '');
+
+    return `<tr>
+      <td><div class="avatar-cell"><div class="table-avatar" style="width:28px;height:28px;font-size:11px">${initials(c.ambassador_name || '?')}</div>${c.ambassador_name || '—'}</div></td>
+      <td>${c.handle || '—'}</td>
+      <td><span class="badge">${c.platform_value || '—'}</span></td>
+      <td>${c.status_value ? statusBadge(c.status_value) : '—'}</td>
+      <td>${c.signing_at ? c.signing_at.slice(0,10) : '—'}</td>
+      <td>${c.end_at ? c.end_at.slice(0,10) : '—'}</td>
+      <td>${daysCell}</td>
+      <td>${postsMonth}</td>
+      <td>${c.price_per_standard_post != null ? fmt(c.price_per_standard_post, 'currency') : '—'}</td>
+      <td>${c.price_per_top_post != null ? fmt(c.price_per_top_post, 'currency') : '—'}</td>
+      <td>${c.currency_value || '—'}</td>
+      <td><strong style="color:var(--accent-teal)">${c.expected_annual_revenue > 0 ? fmt(c.expected_annual_revenue, 'currency') : '—'}</strong></td>
+      <td style="max-width:180px;white-space:normal;font-size:12px;color:var(--text-secondary)">${c.notes || '—'}</td>
+    </tr>`;
+  }).join('');
 }
 
 function buildAmbassadorFilters() {
