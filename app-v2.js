@@ -1541,22 +1541,69 @@ document.getElementById('btn-add-contract').addEventListener('click', async () =
   const profiles = await GET('/profiles', { ambassador_id: selectedAmbassadorId }).catch(() => []);
   if (profiles.length === 0) { alert('Añade un canal primero'); return; }
 
-  const profilesHtml = profiles.map(p => `
+  // Obtener análisis más reciente de cada perfil para calcular revenue esperado por post
+  const analyses = await Promise.all(
+    profiles.map(p => GET('/profile_analyses', { profile_id: p.id }).catch(() => []))
+  );
+
+  // Fórmula revenue por post (misma que dashboard/server)
+  const COUNTRY_RPM = {
+    'ESTADOS UNIDOS':5,'US':5,'AUSTRALIA':3.67,'AU':3.67,'CANADÁ':3.67,'CANADA':3.67,'CA':3.67,
+    'ALEMANIA':3,'DE':3,'IRLANDA':3,'IE':3,'ITALIA':2.67,'IT':2.67,
+    'REINO UNIDO':2,'GB':2,'UK':2,'FRANCIA':1.47,'FR':1.47,'ESPAÑA':1.33,'ES':1.33,
+    'PORTUGAL':0.72,'PT':0.72,'MÉXICO':1,'MEXICO':1,'MX':1,
+    'COLOMBIA':0.53,'CO':0.53,'CHILE':0.53,'CL':0.53,'BRASIL':0.33,'BRAZIL':0.33,'BR':0.33,'ARGENTINA':0.4,'AR':0.4
+  };
+  function calcRevPost(p, pa, type) {
+    const ev = pa?.expected_views || 0;
+    if (!ev) return null;
+    const cCode = (p.country_value || '').toUpperCase();
+    const cMult = COUNTRY_RPM[cCode] ?? 0.12;
+    const cv = pa?.cache_score;
+    const cacheMult = cv == null ? 1.0 : ({ LOW:0.8, MID:1.0, HIGH:1.2 }[(String(cv)).toUpperCase()] ?? (parseFloat(cv) > 0 ? parseFloat(cv) : 1.0));
+    const cts = pa?.content_target_score || 1.0;
+    const cots = pa?.country_target_score || 0.6;
+    const cotsAdj = Math.min(cots / 0.6, 1.0);
+    const base = (ev / 1000) * 42 * cMult * cacheMult * cts * cotsAdj;
+    const plat = (p.platform_value || p.platform || '').toLowerCase();
+    if (plat === 'youtube') return type === 'top' ? base * 4.0 : base * 2.5;
+    if (plat === 'tiktok') return base * 1.0;
+    return null;
+  }
+
+  const profilesHtml = profiles.map((p, i) => {
+    const pa = (analyses[i] || []).sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))[0] || null;
+    const revStd = calcRevPost(p, pa, 'std');
+    const revTop = calcRevPost(p, pa, 'top');
+    const hintStd = revStd != null
+      ? `<span style="color:var(--accent-teal);font-size:11px;font-weight:500"> ≈ ${fmt(revStd,'currency')}/post</span>`
+      : `<span style="color:var(--text-tertiary);font-size:11px"> (sin análisis)</span>`;
+    const hintTop = revTop != null
+      ? `<span style="color:var(--accent-teal);font-size:11px;font-weight:500"> ≈ ${fmt(revTop,'currency')}/post</span>`
+      : `<span style="color:var(--text-tertiary);font-size:11px"> (sin análisis)</span>`;
+    return `
     <div class="contract-profile-block" style="border:1px solid rgba(255,255,255,0.1); padding:10px; border-radius:8px; margin-bottom:12px;">
       <h4 style="margin-top:0;margin-bottom:10px;font-size:13px;color:var(--text-primary)">
         <input type="checkbox" class="ac-profile-check" value="${p.id}" checked />
         Incluir ${p.handle || p.url} (${p.platform})
       </h4>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">€ / post estándar</label><input type="number" class="ac-pstd" data-pid="${p.id}" placeholder="0.00" min="0" step="0.01" /></div>
+        <div class="form-group">
+          <label class="form-label">€ / post estándar${hintStd}</label>
+          <input type="number" class="ac-pstd" data-pid="${p.id}" placeholder="0.00" min="0" step="0.01" />
+        </div>
         <div class="form-group"><label class="form-label">Posts estándar/mes</label><input type="number" class="ac-mstd" data-pid="${p.id}" placeholder="0" min="0" /></div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">€ / post top</label><input type="number" class="ac-ptop" data-pid="${p.id}" placeholder="0.00" min="0" step="0.01" /></div>
+        <div class="form-group">
+          <label class="form-label">€ / post top${hintTop}</label>
+          <input type="number" class="ac-ptop" data-pid="${p.id}" placeholder="0.00" min="0" step="0.01" />
+        </div>
         <div class="form-group"><label class="form-label">Posts top/mes</label><input type="number" class="ac-mtop" data-pid="${p.id}" placeholder="0" min="0" /></div>
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
 
   const updateDatesVisibility = () => {
     const sel = document.getElementById('ac-status');

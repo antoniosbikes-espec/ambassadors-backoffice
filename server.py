@@ -1219,6 +1219,7 @@ class Handler(BaseHTTPRequestHandler):
               a.first_name || ' ' || COALESCE(a.last_name,'') AS ambassador_name,
               lv_plat.value AS platform, lv_plat.value AS platform_value,
               lv_niche.value AS niche,   lv_niche.value AS niche_value,
+              lv_country.value AS country_value,
               (SELECT pa.expected_views FROM profile_analyses pa WHERE pa.profile_id=p.id
                ORDER BY pa.created_at DESC LIMIT 1) AS expected_views,
               (SELECT pa.content_target_score FROM profile_analyses pa WHERE pa.profile_id=p.id
@@ -1227,8 +1228,9 @@ class Handler(BaseHTTPRequestHandler):
                JOIN posts po ON po.id=dv.post_id WHERE po.profile_id=p.id) AS total_views
             FROM profiles p
             JOIN ambassadors a ON a.id = p.ambassador_id
-            LEFT JOIN list_values lv_plat  ON lv_plat.id  = p.platform_id
-            LEFT JOIN list_values lv_niche ON lv_niche.id = p.niche_id
+            LEFT JOIN list_values lv_plat    ON lv_plat.id    = p.platform_id
+            LEFT JOIN list_values lv_niche   ON lv_niche.id   = p.niche_id
+            LEFT JOIN list_values lv_country ON lv_country.id = a.country_id
         """
         params = []
         where = []
