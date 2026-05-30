@@ -263,8 +263,8 @@ function statusBadge(code, label) {
 
 function scoreBar(score) {
   const s = Number(score) || 0;
-  const pct = Math.min(s * 100, 100);
-  const color = s >= 0.9 ? '#22c55e' : s >= 0.75 ? '#8b5cf6' : '#f97316';
+  const pct = Math.min((s / 1.2) * 100, 100);
+  const color = s >= 1.08 ? '#22c55e' : s >= 0.9 ? '#8b5cf6' : '#f97316';
   return `<div class="score-cell">
     <div class="score-bar-wrap"><div class="score-bar" style="width:${pct}%;background:${color}"></div></div>
     <span class="score-value">${s.toFixed(2)}</span>
@@ -1276,7 +1276,7 @@ window.editPost = async (pid) => {
       <div class="form-group"><label class="form-label">Fecha publicación</label><input type="date" id="ep-date" value="${p.published_at ? p.published_at.slice(0, 10) : ''}" /></div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Content Score (0-1)</label><input type="number" id="ep-score" value="${p.content_score || 0}" min="0" max="1" step="0.01" /></div>
+      <div class="form-group"><label class="form-label">Content Score (0-1.2)</label><input type="number" id="ep-score" value="${p.content_score || 0}" min="0" max="1.2" step="0.01" /></div>
       <div class="form-group"><label class="form-label">Offset mención (seg.)</label><input type="number" id="ep-offset" value="${p.mention_offset || 0}" min="0" /></div>
     </div>
   `, async () => {
@@ -1572,7 +1572,7 @@ function openNewPostModal() {
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Views iniciales</label><input type="number" id="nc-views" placeholder="0" min="0" /></div>
-        <div class="form-group"><label class="form-label">Content Score (0-1)</label><input type="number" id="nc-score" placeholder="0.85" min="0" max="1" step="0.01" /></div>
+        <div class="form-group"><label class="form-label">Content Score (0-1.2)</label><input type="number" id="nc-score" placeholder="0.85" min="0" max="1.2" step="0.01" /></div>
       </div>
       <div class="form-group"><label class="form-label">Offset mención (seg.)</label><input type="number" id="nc-offset" placeholder="0" min="0" /></div>
     `, async () => {
@@ -1671,7 +1671,7 @@ document.getElementById('btn-new-post').addEventListener('click', () => {
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Views iniciales</label><input type="number" id="np-views" placeholder="0" min="0" /></div>
-        <div class="form-group"><label class="form-label">Content Score (0-1)</label><input type="number" id="np-score" placeholder="0.85" min="0" max="1" step="0.01" /></div>
+        <div class="form-group"><label class="form-label">Content Score (0-1.2)</label><input type="number" id="np-score" placeholder="0.85" min="0" max="1.2" step="0.01" /></div>
       </div>
     `, async () => {
       const profile_id = parseInt(document.getElementById('np-profile').value);

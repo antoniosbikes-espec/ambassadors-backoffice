@@ -148,7 +148,7 @@ CREATE TABLE IF NOT EXISTS posts (
     url              TEXT    NOT NULL UNIQUE,
     mention_type_id  INTEGER REFERENCES list_values(id),
     mention_offset   INTEGER NOT NULL DEFAULT 0,
-    content_score    REAL    CHECK(content_score BETWEEN 0 AND 1),
+    content_score    REAL    CHECK(content_score BETWEEN 0 AND 1.2),
     published_at     TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_post_profile ON posts(profile_id);
