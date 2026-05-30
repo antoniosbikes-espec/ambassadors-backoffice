@@ -1743,6 +1743,26 @@ document.getElementById('posts-search').addEventListener('input', debounce(rende
 document.getElementById('posts-filter-platform').addEventListener('change', renderPosts);
 document.getElementById('posts-filter-mention').addEventListener('change', renderPosts);
 
+// Drag-to-scroll horizontal en la tabla de posts
+(function() {
+  const el = document.querySelector('.posts-scroll');
+  if (!el) return;
+  let isDown = false, startX, scrollLeft;
+  el.addEventListener('mousedown', e => {
+    isDown = true; el.classList.add('grabbing');
+    startX = e.pageX - el.offsetLeft;
+    scrollLeft = el.scrollLeft;
+  });
+  el.addEventListener('mouseleave', () => { isDown = false; el.classList.remove('grabbing'); });
+  el.addEventListener('mouseup',    () => { isDown = false; el.classList.remove('grabbing'); });
+  el.addEventListener('mousemove',  e => {
+    if (!isDown) return;
+    e.preventDefault();
+    const x = e.pageX - el.offsetLeft;
+    el.scrollLeft = scrollLeft - (x - startX);
+  });
+})();
+
 document.getElementById('btn-new-post').addEventListener('click', () => {
   GET('/profiles').then(profiles => {
     window.updateExpectedViews = function(selId, inpId) {

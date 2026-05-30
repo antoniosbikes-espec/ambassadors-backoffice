@@ -612,6 +612,24 @@ textarea:focus { border-color: var(--accent-purple); box-shadow: 0 0 0 2px rgba(
   -webkit-overflow-scrolling: touch;
 }
 
+/* Posts tabla — scroll horizontal con cursor drag */
+.posts-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  cursor: grab;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-medium) transparent;
+}
+
+.posts-scroll:active { cursor: grabbing; }
+
+.posts-scroll::-webkit-scrollbar { height: 6px; }
+.posts-scroll::-webkit-scrollbar-track { background: transparent; }
+.posts-scroll::-webkit-scrollbar-thumb { background: var(--border-medium); border-radius: 99px; }
+.posts-scroll::-webkit-scrollbar-thumb:hover { background: var(--border-highlight, var(--accent-purple)); }
+
+#posts-table { min-width: 900px; }
+
 /* Para la tabla del explorador, evitar que se compriman las columnas */
 #db-data-table {
   width: max-content;
