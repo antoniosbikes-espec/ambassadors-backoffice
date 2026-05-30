@@ -1370,17 +1370,13 @@ class Handler(BaseHTTPRequestHandler):
     # ── POST ENDPOINTS ───────────────────────────────────────
     def get_posts(self, qs={}):
         days = qs.get('days', [''])[0]
-        if days:
-            views_cond = f"AND dv.views_date >= date('now', '-{days} days')"
-        else:
-            views_cond = ''
-        sql = f"""
+        sql = """
             SELECT po.*,
               lv_mt.value AS mention_type, lv_mt.value AS mention_type_value,
               p.handle, p.ambassador_id,
               a.first_name || ' ' || COALESCE(a.last_name,'') AS ambassador_name,
               lv_plat.value AS platform, lv_plat.value AS platform_value,
-              COALESCE(SUM(CASE WHEN dv.id IS NOT NULL {views_cond} THEN dv.new_views ELSE 0 END),0) AS total_views
+              COALESCE(SUM(dv.new_views),0) AS total_views
             FROM posts po
             JOIN profiles p ON p.id = po.profile_id
             JOIN ambassadors a ON a.id = p.ambassador_id
@@ -1390,6 +1386,9 @@ class Handler(BaseHTTPRequestHandler):
         """
         params = []
         where = []
+        # Filtrar posts por fecha de publicación cuando se selecciona un rango de días
+        if days:
+            where.append(f"po.published_at >= date('now', '-{days} days')")
         if qs.get('profile_id'):
             where.append('po.profile_id=?'); params.append(qs['profile_id'][0])
         if qs.get('ambassador_id'):
