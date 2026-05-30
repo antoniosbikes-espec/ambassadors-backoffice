@@ -1998,16 +1998,29 @@ async function renderRevenue() {
   const [revenues, rpus] = await Promise.all([GET('/revenues'), GET('/rpus')]).catch(() => [[], []]);
   renderRevenueTable(revenues);
   renderRpuTable(rpus);
+  // Refrescar tabla de currencies si está visible en Settings
+  if (document.getElementById('currency-list')) {
+    GET('/currencies').then(renderCurrencyList).catch(() => {});
+  }
 }
 
 function renderRevenueTable(rows) {
-  document.getElementById('revenue-body').innerHTML = (rows || []).map(r => `
-    <tr>
+  document.getElementById('revenue-body').innerHTML = (rows || []).map(r => {
+    const hasConversion = r.currency_value && r.currency_value !== 'Euro' && r.rate_to_eur;
+    const eurEquiv = r.revenue_eur != null ? r.revenue_eur : r.new_revenue;
+    return `<tr>
       <td style="color:var(--text-tertiary);font-size:11px">#${r.id}</td>
       <td>${r.views_date}</td>
       <td><span class="badge badge-country">${r.country_value || r.country || '— N/A —'}</span></td>
       <td><span class="badge badge-lang" style="background:var(--accent-purple-alpha)">${r.currency_value || r.currency || '—'}</span></td>
       <td><strong style="color:var(--accent-teal)">${fmt(r.new_revenue, 'currency')}</strong></td>
+      <td>
+        ${hasConversion
+          ? `<strong style="color:var(--accent-green)">${fmt(eurEquiv, 'currency')}</strong>
+             <small style="color:var(--text-tertiary);font-size:10px"> ×${r.rate_to_eur}</small>`
+          : `<span style="color:var(--text-tertiary)">${fmt(eurEquiv, 'currency')}</span>`
+        }
+      </td>
       <td style="display:flex;gap:4px;align-items:center">
         <button class="btn-icon" onclick="editRevenue(${r.id})" title="Editar" style="color:var(--accent-teal)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -2016,8 +2029,8 @@ function renderRevenueTable(rows) {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
         </button>
       </td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
 }
 
 function renderRpuTable(rows) {
@@ -2250,6 +2263,8 @@ function renderSettings() {
       </li>
     `).join('') || '<li style="color:var(--text-tertiary);font-size:12px;padding:8px 0">Sin valores</li>';
   });
+  // Cargar tabla de tipos de cambio
+  GET('/currencies').then(renderCurrencyList).catch(() => {});
 }
 
 window.deleteListValue = async (id, listName) => {
@@ -2291,6 +2306,79 @@ window.deleteListValue = async (id, listName) => {
         return false;
       }
     });
+  });
+});
+
+// ─── CURRENCIES (Tipos de cambio) ────────────────────────────
+async function renderCurrencyList(currencies) {
+  if (!currencies) currencies = await GET('/currencies').catch(() => []);
+  const tbody = document.getElementById('currencies-body');
+  if (!tbody) return;
+  tbody.innerHTML = currencies.length ? currencies.map(c => `
+    <tr>
+      <td><strong>${c.currency}</strong></td>
+      <td>${c.date}</td>
+      <td><strong style="color:var(--accent-teal)">${Number(c.rate_to_eur).toFixed(4)}</strong></td>
+      <td style="display:flex;gap:4px">
+        <button class="btn-icon" onclick="editCurrency(${c.id})" style="color:var(--accent-teal)" title="Editar">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="btn-icon" onclick="deleteCurrency(${c.id})" style="color:var(--danger)" title="Eliminar">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+        </button>
+      </td>
+    </tr>
+  `).join('') : '<tr><td colspan="4" style="text-align:center;color:var(--text-tertiary);padding:16px">Sin registros</td></tr>';
+}
+
+window.deleteCurrency = async (id) => {
+  if (!confirm('¿Eliminar este tipo de cambio?')) return;
+  await DELETE(`/currencies/${id}`);
+  GET('/currencies').then(renderCurrencyList);
+};
+
+window.editCurrency = async (id) => {
+  const list = await GET('/currencies').catch(() => []);
+  const c = list.find(x => x.id == id);
+  if (!c) return;
+  openModal('Editar tipo de cambio', `
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Moneda</label><input type="text" id="cur-name" value="${c.currency}" /></div>
+      <div class="form-group"><label class="form-label">Fecha</label><input type="date" id="cur-date" value="${c.date}" /></div>
+    </div>
+    <div class="form-group"><label class="form-label">Tipo de cambio (1 unidad → EUR)</label><input type="number" id="cur-rate" value="${c.rate_to_eur}" step="0.0001" min="0" /></div>
+    <small style="color:var(--text-tertiary)">Ej: si 1 USD = 0.92 EUR → pon 0.92</small>
+  `, async () => {
+    const currency = document.getElementById('cur-name').value.trim();
+    const date = document.getElementById('cur-date').value;
+    const rate_to_eur = parseFloat(document.getElementById('cur-rate').value);
+    if (!currency || !date || isNaN(rate_to_eur)) { alert('Todos los campos son obligatorios'); return false; }
+    await PUT(`/currencies/${id}`, { currency, date, rate_to_eur });
+    GET('/currencies').then(renderCurrencyList);
+    return true;
+  });
+};
+
+document.getElementById('btn-add-currency-rate')?.addEventListener('click', () => {
+  openModal('Añadir tipo de cambio', `
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Moneda *</label>
+        <select id="cur-sel" class="filter-select" style="width:100%">
+          ${(LISTS.currency || []).map(c => `<option value="${c.value}">${c.value}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Fecha *</label><input type="date" id="cur-date" value="${new Date().toISOString().slice(0,10)}" /></div>
+    </div>
+    <div class="form-group"><label class="form-label">Tipo de cambio (1 unidad → EUR)</label><input type="number" id="cur-rate" placeholder="0.92" step="0.0001" min="0" /></div>
+    <small style="color:var(--text-tertiary)">Ej: si 1 USD = 0.92 EUR → pon 0.92</small>
+  `, async () => {
+    const currency = document.getElementById('cur-sel').value;
+    const date = document.getElementById('cur-date').value;
+    const rate_to_eur = parseFloat(document.getElementById('cur-rate').value);
+    if (!currency || !date || isNaN(rate_to_eur)) { alert('Todos los campos son obligatorios'); return false; }
+    await POST('/currencies', { currency, date, rate_to_eur });
+    GET('/currencies').then(renderCurrencyList);
+    return true;
   });
 });
 

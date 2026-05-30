@@ -605,14 +605,15 @@
           <div class="table-card">
             <table class="data-table" id="revenue-table">
               <thead>
-                <tr>
-                  <th style="width:40px">#</th>
-                  <th>Fecha</th>
-                  <th>País</th>
-                  <th>Moneda</th>
-                  <th>Revenue real (€)</th>
-                  <th>Acciones</th>
-                </tr>
+                 <tr>
+                   <th style="width:40px">#</th>
+                   <th>Fecha</th>
+                   <th>País</th>
+                   <th>Moneda</th>
+                   <th>Importe original</th>
+                   <th>EUR equiv.</th>
+                   <th>Acciones</th>
+                 </tr>
               </thead>
               <tbody id="revenue-body"></tbody>
             </table>
@@ -748,6 +749,30 @@
             </div>
             <ul class="catalog-list" id="currency-list"></ul>
           </div>
+
+          <!-- Tipos de cambio — tabla separada -->
+          <div class="settings-card" id="settings-currency-rates" style="grid-column: span 2">
+            <div class="settings-card-header">
+              <h3>Tipos de cambio (vs Euro)</h3>
+              <button class="btn-icon" id="btn-add-currency-rate">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              </button>
+            </div>
+            <table class="data-table" style="width:100%">
+              <thead>
+                <tr>
+                  <th>Moneda</th>
+                  <th>Fecha</th>
+                  <th>Rate → EUR</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="currencies-body">
+                <tr><td colspan="4" style="text-align:center;color:var(--text-tertiary);padding:16px">Cargando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+
         </div>
       </section>
 

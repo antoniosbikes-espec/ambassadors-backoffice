@@ -237,6 +237,11 @@ INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'TikTok' FROM lists W
 INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'Euro'              FROM lists WHERE name='currency';
 INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'Dólar USD'         FROM lists WHERE name='currency';
 INSERT OR IGNORE INTO list_values(list_id,value) SELECT id,'Libra esterlina'   FROM lists WHERE name='currency';
+
+-- Tipos de cambio iniciales (fecha de referencia)
+INSERT OR IGNORE INTO currencies(currency,date,rate_to_eur) VALUES('Euro',           date('now'), 1.00);
+INSERT OR IGNORE INTO currencies(currency,date,rate_to_eur) VALUES('Dólar USD',      date('now'), 0.92);
+INSERT OR IGNORE INTO currencies(currency,date,rate_to_eur) VALUES('Libra esterlina',date('now'), 1.17);
 """
 
 DEMO_DATA = """
@@ -562,11 +567,30 @@ def init_db():
         # 6. Ambassadors soft delete
         safe_add_col('ambassadors', 'is_active', 'INTEGER NOT NULL DEFAULT 1')
 
-        # 6. Contracts — asegurar todas las columnas requeridas
+        # 7. Contracts — asegurar todas las columnas requeridas
         safe_add_col('contracts', 'signing_at', 'TEXT')
         safe_add_col('contracts', 'end_at', 'TEXT')
         safe_add_col('contracts', 'contract_file_url', 'TEXT')
         safe_add_col('contracts', 'notes', 'TEXT')
+
+        # 8. Tabla currencies (tipos de cambio)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS currencies (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                currency    TEXT    NOT NULL,
+                date        TEXT    NOT NULL,
+                rate_to_eur REAL    NOT NULL DEFAULT 1.0,
+                UNIQUE(currency, date)
+            )
+        """)
+        # Seed tipos de cambio por defecto si la tabla está vacía
+        count = conn.execute("SELECT COUNT(*) FROM currencies").fetchone()[0]
+        if count == 0:
+            conn.executescript("""
+                INSERT OR IGNORE INTO currencies(currency,date,rate_to_eur) VALUES('Euro',           date('now'), 1.00);
+                INSERT OR IGNORE INTO currencies(currency,date,rate_to_eur) VALUES('Dólar USD',      date('now'), 0.92);
+                INSERT OR IGNORE INTO currencies(currency,date,rate_to_eur) VALUES('Libra esterlina',date('now'), 1.17);
+            """)
 
         # SEEDS
         conn.executescript(SEEDS)
@@ -978,7 +1002,17 @@ class Handler(BaseHTTPRequestHandler):
             if pid and method == 'PUT':    return self.update_revenue(pid)
             if pid and method == 'DELETE': return self.delete_revenue(pid)
 
-            # ── /api/rpus ────────────────────────────────────
+            # ── /api/currencies ────────────────────────────────
+            if path == '/api/currencies' and method == 'GET':
+                return self.get_currencies()
+            if path == '/api/currencies' and method == 'POST':
+                return self.create_currency()
+            cid2 = path_id('/api/currencies')
+            if cid2:
+                if method == 'PUT':    return self.update_currency(cid2)
+                if method == 'DELETE': return self.delete_currency(cid2)
+
+            # ── /api/rpus ───────────────────────────────────────
             if path == '/api/rpus' and method == 'GET':
                 return self.get_rpus(qs)
             if path == '/api/rpus' and method == 'POST':
@@ -1583,14 +1617,51 @@ class Handler(BaseHTTPRequestHandler):
         row = self.db.execute("SELECT * FROM daily_views WHERE id=?", (cur.lastrowid,)).fetchone()
         self.send_json(dict(row), 201)
 
+    # ── CURRENCIES ───────────────────────────────────────────
+    def get_currencies(self):
+        rows = self.db.execute(
+            "SELECT * FROM currencies ORDER BY currency, date DESC"
+        ).fetchall()
+        self.send_json(rows_to_list(rows))
+
+    def create_currency(self):
+        body = self.read_body()
+        cur = self.db.execute(
+            "INSERT INTO currencies(currency,date,rate_to_eur) VALUES(?,?,?)",
+            (body.get('currency'), body.get('date'), body.get('rate_to_eur', 1.0))
+        )
+        self.db.commit()
+        row = self.db.execute("SELECT * FROM currencies WHERE id=?", (cur.lastrowid,)).fetchone()
+        self.send_json(dict(row), 201)
+
+    def update_currency(self, cid):
+        body = self.read_body()
+        self.db.execute(
+            "UPDATE currencies SET currency=?, date=?, rate_to_eur=? WHERE id=?",
+            (body.get('currency'), body.get('date'), body.get('rate_to_eur', 1.0), cid)
+        )
+        self.db.commit()
+        row = self.db.execute("SELECT * FROM currencies WHERE id=?", (cid,)).fetchone()
+        self.send_json(dict(row))
+
+    def delete_currency(self, cid):
+        self.db.execute("DELETE FROM currencies WHERE id=?", (cid,))
+        self.db.commit()
+        self.send_json({'deleted': cid})
+
     # ── REVENUES ─────────────────────────────────────────────
     def get_revenues(self, qs={}):
         rows = self.db.execute("""
-            SELECT r.*, lv_c.value AS country, lv_c.value AS country_value,
-              lv_cur.value AS currency, lv_cur.value AS currency_value
+            SELECT r.*,
+              lv_c.value AS country, lv_c.value AS country_value,
+              lv_cur.value AS currency, lv_cur.value AS currency_value,
+              COALESCE(cx.rate_to_eur, 1.0) AS rate_to_eur,
+              ROUND(r.new_revenue * COALESCE(cx.rate_to_eur, 1.0), 2) AS revenue_eur
             FROM revenues r
             LEFT JOIN list_values lv_c   ON lv_c.id   = r.country_id
             LEFT JOIN list_values lv_cur ON lv_cur.id = r.currency_id
+            LEFT JOIN currencies cx ON cx.currency = lv_cur.value
+                AND cx.date = (SELECT MAX(date) FROM currencies WHERE currency = lv_cur.value)
             ORDER BY r.views_date DESC
         """).fetchall()
         self.send_json(rows_to_list(rows))
