@@ -643,6 +643,7 @@ async function renderAmbassadors() {
       <td><span class="badge badge-lang">${a.language_code || '—'}</span></td>
       <td><strong>${a.profile_count || 0}</strong></td>
       <td>${a.latest_contract_status ? statusBadge(a.latest_contract_status) : '<span style="color:var(--text-tertiary)">—</span>'}</td>
+      <td><strong style="color:var(--accent-teal)">${a.monthly_expected_revenue > 0 ? fmt(a.monthly_expected_revenue, 'currency') : '<span style="color:var(--text-tertiary)">—</span>'}</strong></td>
       <td>${a.is_active === 0 ? '<span class="badge" style="background:var(--danger)">No</span>' : '<span class="badge" style="background:var(--success)">Sí</span>'}</td>
     </tr>
   `).join('');

@@ -1067,7 +1067,31 @@ class Handler(BaseHTTPRequestHandler):
               (SELECT lv.value FROM contracts c
                JOIN profiles p2 ON p2.id=c.profile_id
                JOIN list_values lv ON lv.id=c.status_id
-               WHERE p2.ambassador_id=a.id ORDER BY c.created_at DESC LIMIT 1) AS latest_contract_status
+               WHERE p2.ambassador_id=a.id ORDER BY c.created_at DESC LIMIT 1) AS latest_contract_status,
+              COALESCE((
+                SELECT SUM(
+                  CASE
+                    WHEN LOWER(lv_plat.value) = 'youtube' THEN
+                      (COALESCE(pa.expected_views,0) / 1000.0) * 42.0
+                      * COALESCE(pa.content_target_score, 1.0)
+                      * MIN(COALESCE(pa.country_target_score, 0.6) / 0.6, 1.0)
+                      * (c2.monthly_standard_posts * 2.5 + COALESCE(c2.monthly_top_posts,0) * 4.0)
+                    WHEN LOWER(lv_plat.value) = 'tiktok' THEN
+                      (COALESCE(pa.expected_views,0) / 1000.0) * 42.0
+                      * COALESCE(pa.content_target_score, 1.0)
+                      * MIN(COALESCE(pa.country_target_score, 0.6) / 0.6, 1.0)
+                      * (COALESCE(c2.monthly_standard_posts,0) + COALESCE(c2.monthly_top_posts,0))
+                    ELSE 0
+                  END
+                )
+                FROM contracts c2
+                JOIN profiles p3 ON p3.id = c2.profile_id
+                JOIN list_values lv_st2 ON lv_st2.id = c2.status_id AND lv_st2.value = 'Firmado'
+                JOIN list_values lv_plat ON lv_plat.id = p3.platform_id
+                LEFT JOIN profile_analyses pa ON pa.id = COALESCE(c2.last_analysis_id,
+                  (SELECT id FROM profile_analyses WHERE profile_id = p3.id ORDER BY created_at DESC LIMIT 1))
+                WHERE p3.ambassador_id = a.id
+              ), 0) AS monthly_expected_revenue
             FROM ambassadors a
             LEFT JOIN list_values lv_lang    ON lv_lang.id    = a.primary_language_id
             LEFT JOIN list_values lv_country ON lv_country.id = a.country_id
@@ -1105,7 +1129,7 @@ class Handler(BaseHTTPRequestHandler):
         
         if where:
             sql += ' WHERE ' + ' AND '.join(where)
-        sql += ' ORDER BY a.first_name'
+        sql += ' ORDER BY monthly_expected_revenue DESC, a.first_name'
         rows = self.db.execute(sql, params).fetchall()
         data = rows_to_list(rows)
         print(f"✅ Ambassadors found: {len(data)}")
