@@ -928,7 +928,8 @@ window.analyzeProfile = async (pid) => {
   openModal('Análisis de rendimiento', `
     <div class="form-group">
       <label class="form-label">Visualizaciones esperadas (avg/post)</label>
-      <input type="number" id="ap-views" value="${an.expected_views || 0}" placeholder="Ej: 150000" />
+      <input type="number" id="ap-views" value="${an.expected_views || 0}" placeholder="Ej: 150000" step="1" min="0" oninput="this.value=this.value.replace(/[.,]/g,'')" />
+      <span id="ap-views-err" style="color:var(--danger);font-size:11px;display:none">⚠ Solo se permiten números enteros</span>
     </div>
     <div class="form-row">
       <div class="form-group">
@@ -951,6 +952,13 @@ window.analyzeProfile = async (pid) => {
     </div>
   `, async () => {
     const expected_views = parseInt(document.getElementById('ap-views').value) || 0;
+    const apViewsRaw = document.getElementById('ap-views').value;
+    if (apViewsRaw.includes('.') || apViewsRaw.includes(',') || !Number.isInteger(Number(apViewsRaw))) {
+      document.getElementById('ap-views-err').style.display = 'block';
+      document.getElementById('ap-views').focus();
+      return false;
+    }
+    document.getElementById('ap-views-err').style.display = 'none';
     const cache_val = document.getElementById('ap-cache').value;
     const cache_score = cache_val === 'LOW' ? 0.8 : (cache_val === 'HIGH' ? 1.2 : 1.0);
     const content_target_score = parseFloat(document.getElementById('ap-content').value) || 1.0;
@@ -1219,7 +1227,8 @@ window.openAddViewsModal = (postId) => {
       </div>
       <div class="form-group">
         <label class="form-label">Nuevas views *</label>
-        <input type="number" id="av-views" placeholder="0" min="0" />
+        <input type="number" id="av-views" placeholder="0" min="0" step="1" oninput="this.value=this.value.replace(/[.,]/g,'')" />
+        <span id="av-views-err" style="color:var(--danger);font-size:11px;display:none">⚠ Solo se permiten números enteros</span>
       </div>
     </div>
     <p style="font-size:11px;color:var(--text-tertiary);margin-top:4px;">
@@ -1228,8 +1237,15 @@ window.openAddViewsModal = (postId) => {
   `, async () => {
     const post_id = parseInt(document.getElementById('av-post-id').value);
     const views_date = document.getElementById('av-date').value;
-    const new_views = parseInt(document.getElementById('av-views').value);
+    const avRaw = document.getElementById('av-views').value;
+    const new_views = parseInt(avRaw);
     if (!views_date) { alert('La fecha es obligatoria'); return false; }
+    if (avRaw.includes('.') || avRaw.includes(',') || !Number.isInteger(Number(avRaw))) {
+      document.getElementById('av-views-err').style.display = 'block';
+      document.getElementById('av-views').focus();
+      return false;
+    }
+    document.getElementById('av-views-err').style.display = 'none';
     if (isNaN(new_views) || new_views < 0) { alert('Introduce un número de views válido'); return false; }
     try {
       await POST('/post_views', { post_id, views_date, new_views });
@@ -1571,7 +1587,7 @@ function openNewPostModal() {
         <div class="form-group"><label class="form-label">Fecha publicación</label><input type="date" id="nc-date" value="${new Date().toISOString().slice(0, 10)}" /></div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Views iniciales</label><input type="number" id="nc-views" placeholder="0" min="0" /></div>
+        <div class="form-group"><label class="form-label">Views iniciales</label><input type="number" id="nc-views" placeholder="0" min="0" step="1" oninput="this.value=this.value.replace(/[.,]/g,'')" /><span id="nc-views-err" style="color:var(--danger);font-size:11px;display:none">⚠ Solo se permiten números enteros</span></div>
         <div class="form-group"><label class="form-label">Content Score (0-1.2)</label><input type="number" id="nc-score" placeholder="0.85" min="0" max="1.2" step="0.01" /></div>
       </div>
       <div class="form-group"><label class="form-label">Offset mención (seg.)</label><input type="number" id="nc-offset" placeholder="0" min="0" /></div>
@@ -1580,7 +1596,14 @@ function openNewPostModal() {
       const url = document.getElementById('nc-url').value.trim();
       const mention_type_id = parseInt(document.getElementById('nc-mention').value) || null;
       const published_at = document.getElementById('nc-date').value || null;
-      const views = parseInt(document.getElementById('nc-views').value) || 0;
+      const ncRaw = document.getElementById('nc-views').value;
+      if (ncRaw && (ncRaw.includes('.') || ncRaw.includes(',') || !Number.isInteger(Number(ncRaw)))) {
+        document.getElementById('nc-views-err').style.display = 'block';
+        document.getElementById('nc-views').focus();
+        return false;
+      }
+      if (document.getElementById('nc-views-err')) document.getElementById('nc-views-err').style.display = 'none';
+      const views = parseInt(ncRaw) || 0;
       const scoreVal = document.getElementById('nc-score').value;
       const content_score = scoreVal !== '' ? parseFloat(scoreVal) : null;
       const mention_offset = parseInt(document.getElementById('nc-offset').value) || 0;
@@ -1670,7 +1693,7 @@ document.getElementById('btn-new-post').addEventListener('click', () => {
         <div class="form-group"><label class="form-label">Fecha publicación</label><input type="date" id="np-date" value="${new Date().toISOString().slice(0, 10)}" /></div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Views iniciales</label><input type="number" id="np-views" placeholder="0" min="0" /></div>
+        <div class="form-group"><label class="form-label">Views iniciales</label><input type="number" id="np-views" placeholder="0" min="0" step="1" oninput="this.value=this.value.replace(/[.,]/g,'')" /><span id="np-views-err" style="color:var(--danger);font-size:11px;display:none">⚠ Solo se permiten números enteros</span></div>
         <div class="form-group"><label class="form-label">Content Score (0-1.2)</label><input type="number" id="np-score" placeholder="0.85" min="0" max="1.2" step="0.01" /></div>
       </div>
     `, async () => {
@@ -1678,7 +1701,14 @@ document.getElementById('btn-new-post').addEventListener('click', () => {
       const url = document.getElementById('np-url').value.trim();
       const mention_type_id = parseInt(document.getElementById('np-mention').value) || null;
       const published_at = document.getElementById('np-date').value || null;
-      const views = parseInt(document.getElementById('np-views').value) || 0;
+      const npRaw = document.getElementById('np-views').value;
+      if (npRaw && (npRaw.includes('.') || npRaw.includes(',') || !Number.isInteger(Number(npRaw)))) {
+        document.getElementById('np-views-err').style.display = 'block';
+        document.getElementById('np-views').focus();
+        return false;
+      }
+      if (document.getElementById('np-views-err')) document.getElementById('np-views-err').style.display = 'none';
+      const views = parseInt(npRaw) || 0;
       const content_score = parseFloat(document.getElementById('np-score').value) || null;
       if (!url || !profile_id) { alert('Canal y URL son obligatorios'); return false; }
       try {
