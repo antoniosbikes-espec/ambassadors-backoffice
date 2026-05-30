@@ -926,10 +926,17 @@ window.analyzeProfile = async (pid) => {
   const an = await GET('/profile_analyses', { profile_id: pid }).then(list => list[0] || {}).catch(() => ({}));
   
   openModal('Análisis de rendimiento', `
-    <div class="form-group">
-      <label class="form-label">Visualizaciones esperadas (avg/post)</label>
-      <input type="number" id="ap-views" value="${an.expected_views || 0}" placeholder="Ej: 150000" step="1" min="0" oninput="this.value=this.value.replace(/[.,]/g,'')" />
-      <span id="ap-views-err" style="color:var(--danger);font-size:11px;display:none">⚠ Solo se permiten números enteros</span>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Visualizaciones esperadas (avg/post)</label>
+        <input type="number" id="ap-views" value="${an.expected_views || 0}" placeholder="Ej: 150000" step="1" min="0" oninput="this.value=this.value.replace(/[.,]/g,'')" />
+        <span id="ap-views-err" style="color:var(--danger);font-size:11px;display:none">⚠ Solo se permiten números enteros</span>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Posts últimos 30 días</label>
+        <input type="number" id="ap-posts30" value="${an.total_30d_posts || 0}" placeholder="Ej: 4" step="1" min="0" oninput="this.value=this.value.replace(/[.,]/g,'')" />
+        <span id="ap-posts30-err" style="color:var(--danger);font-size:11px;display:none">⚠ Solo se permiten números enteros</span>
+      </div>
     </div>
     <div class="form-row">
       <div class="form-group">
@@ -951,14 +958,22 @@ window.analyzeProfile = async (pid) => {
       <small style="color:var(--text-tertiary)">Representa el porcentaje de audiencia en el país objetivo.</small>
     </div>
   `, async () => {
-    const expected_views = parseInt(document.getElementById('ap-views').value) || 0;
     const apViewsRaw = document.getElementById('ap-views').value;
+    const apPosts30Raw = document.getElementById('ap-posts30').value;
     if (apViewsRaw.includes('.') || apViewsRaw.includes(',') || !Number.isInteger(Number(apViewsRaw))) {
       document.getElementById('ap-views-err').style.display = 'block';
       document.getElementById('ap-views').focus();
       return false;
     }
     document.getElementById('ap-views-err').style.display = 'none';
+    if (apPosts30Raw.includes('.') || apPosts30Raw.includes(',') || !Number.isInteger(Number(apPosts30Raw))) {
+      document.getElementById('ap-posts30-err').style.display = 'block';
+      document.getElementById('ap-posts30').focus();
+      return false;
+    }
+    document.getElementById('ap-posts30-err').style.display = 'none';
+    const expected_views = parseInt(apViewsRaw) || 0;
+    const total_30d_posts = parseInt(apPosts30Raw) || 0;
     const cache_val = document.getElementById('ap-cache').value;
     const cache_score = cache_val === 'LOW' ? 0.8 : (cache_val === 'HIGH' ? 1.2 : 1.0);
     const content_target_score = parseFloat(document.getElementById('ap-content').value) || 1.0;
@@ -968,6 +983,7 @@ window.analyzeProfile = async (pid) => {
       await POST('/profile_analyses', {
         profile_id: pid,
         expected_views,
+        total_30d_posts,
         cache_score,
         content_target_score,
         country_target_score
