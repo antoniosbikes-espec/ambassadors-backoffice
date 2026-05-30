@@ -1483,10 +1483,16 @@ class Handler(BaseHTTPRequestHandler):
             self.send_err(str(e), 500)
     # ── POST VIEWS ───────────────────────────────────────────
     def get_post_views(self, qs={}):
-        sql = "SELECT * FROM daily_views"
         params = []
+        where = []
         if qs.get('post_id'):
-            sql += ' WHERE post_id=?'; params.append(qs['post_id'][0])
+            where.append('post_id=?'); params.append(qs['post_id'][0])
+        if qs.get('days'):
+            days = qs['days'][0]
+            where.append(f"views_date >= date('now', '-{days} days')")
+        sql = "SELECT * FROM daily_views"
+        if where:
+            sql += ' WHERE ' + ' AND '.join(where)
         sql += ' ORDER BY views_date'
         rows = self.db.execute(sql, params).fetchall()
         self.send_json(rows_to_list(rows))

@@ -1846,17 +1846,18 @@ async function renderAnalytics() {
   if (niche) qs.niche_value = niche;
   if (platform) qs.platform_value = platform;
 
-  const [ambassadors, profiles, posts, contracts, analyses] = await Promise.all([
+  const [ambassadors, profiles, posts, contracts, analyses, postViews] = await Promise.all([
     GET('/ambassadors', qs),
     GET('/profiles', qs),
     GET('/posts', qs),
     GET('/contracts', qs),
-    GET('/profile_analyses', qs)
-  ]).catch(() => [[], [], [], [], []]);
+    GET('/profile_analyses', qs),
+    GET('/post_views', days ? { days } : null)
+  ]).catch(() => [[], [], [], [], [], []]);
 
   const groups = buildAnalyticsGroups(ambassadors, profiles, posts, contracts, analyses, groupBy);
   renderScatterChart(groups, metricX, metricY);
-  renderCumulativeChart(groups);
+  renderCumulativeChart(groups, postViews, posts, profiles, ambassadors);
   renderAnalyticsTable(groups);
 }
 
@@ -1950,28 +1951,95 @@ function renderScatterChart(groups, metricX, metricY) {
   });
 }
 
-function renderCumulativeChart(groups) {
+function renderCumulativeChart(groups, postViews, posts, profiles, ambassadors) {
   destroyChart('cumulative');
   const ctx = document.getElementById('canvas-cumulative');
-  if (!ctx) return;
-  const colors = ['#8b5cf6', '#3b82f6', '#14b8a6', '#22c55e'];
-  const labels = Array.from({ length: 30 }, (_, i) => {
-    const d = new Date(); d.setDate(d.getDate() - (29 - i));
-    return d.toLocaleDateString('es-ES', { month: 'short', day: 'numeric' });
+  if (!ctx || !groups.length) return;
+
+  // Paleta amplia — se repite si hay más grupos que colores
+  const PALETTE = ['#8b5cf6','#3b82f6','#14b8a6','#22c55e','#f97316','#ef4444','#e1306c','#766dff','#fbbf24','#06b6d4','#a3e635','#f43f5e'];
+
+  // Últimos N días (igual que el filtro activo)
+  const days = parseInt(document.getElementById('filter-date')?.value || '30');
+  const labels = [];
+  const dateKeys = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    labels.push(d.toLocaleDateString('es-ES', { month: 'short', day: 'numeric' }));
+    dateKeys.push(d.toISOString().slice(0, 10));
+  }
+
+  // Construir mapa: groupLabel → { dateKey → views }
+  const groupBy = document.querySelector('#group-by .pill.active')?.dataset.groupby || 'ambassador';
+
+  function groupKeyForPost(po) {
+    if (groupBy === 'platform') {
+      const prof = profiles.find(p => p.id == po.profile_id);
+      return prof?.platform_value || prof?.platform || '—';
+    }
+    if (groupBy === 'niche') {
+      const prof = profiles.find(p => p.id == po.profile_id);
+      return prof?.niche_value || prof?.niche || '—';
+    }
+    if (groupBy === 'profile') {
+      const prof = profiles.find(p => p.id == po.profile_id);
+      return prof?.handle || prof?.url || '—';
+    }
+    if (groupBy === 'country') {
+      const prof = profiles.find(p => p.id == po.profile_id);
+      const amb = ambassadors.find(a => a.id == prof?.ambassador_id);
+      return amb?.country_value || '—';
+    }
+    // ambassador (default)
+    const amb = ambassadors.find(a => a.id == po.ambassador_id);
+    return amb ? (amb.first_name + ' ' + (amb.last_name || '')).trim() : '—';
+  }
+
+  // Acumular daily_views por grupo y fecha
+  const dailyMap = {}; // { groupLabel: { dateKey: views } }
+  (postViews || []).forEach(dv => {
+    if (!dateKeys.includes(dv.views_date)) return;
+    const po = posts.find(p => p.id == dv.post_id);
+    if (!po) return;
+    const key = groupKeyForPost(po);
+    if (!dailyMap[key]) dailyMap[key] = {};
+    dailyMap[key][dv.views_date] = (dailyMap[key][dv.views_date] || 0) + (dv.new_views || 0);
   });
+
+  // Construir datasets acumulados para cada grupo (en orden de los groups ya ordenados por views)
+  const datasets = groups.map((g, i) => {
+    const color = PALETTE[i % PALETTE.length];
+    const dayData = dailyMap[g.label] || {};
+    let cum = 0;
+    const data = dateKeys.map(dk => {
+      cum += dayData[dk] || 0;
+      return cum;
+    });
+    return {
+      label: g.label,
+      data,
+      borderColor: color,
+      backgroundColor: color + '18',
+      fill: false,
+      tension: 0.4,
+      pointRadius: 0,
+      borderWidth: 2
+    };
+  }).filter(ds => ds.data.some(v => v > 0)); // ocultar grupos sin datos en el periodo
+
   chartInstances['cumulative'] = new Chart(ctx, {
     type: 'line',
-    data: {
-      labels, datasets: groups.slice(0, 4).map((g, i) => {
-        const base = g.views / 30;
-        const data = []; let cum = 0;
-        for (let j = 0; j < 30; j++) { cum += Math.max(0, base + (Math.random() - 0.4) * base); data.push(Math.round(cum)); }
-        return { label: g.label, data, borderColor: colors[i], fill: false, tension: 0.4, pointRadius: 0, borderWidth: 2 };
-      })
-    },
+    data: { labels, datasets },
     options: {
       ...baseOpts(),
-      plugins: { ...baseOpts().plugins, legend: { display: true, position: 'top', labels: { color: '#8b92a8', font: { size: 11, family: 'Inter' }, padding: 12 } } },
+      plugins: {
+        ...baseOpts().plugins,
+        legend: {
+          display: true,
+          position: 'top',
+          labels: { color: '#8b92a8', font: { size: 11, family: 'Inter' }, padding: 10, boxWidth: 12 }
+        }
+      },
       scales: { x: xAxis(), y: yAxis() }
     }
   });
