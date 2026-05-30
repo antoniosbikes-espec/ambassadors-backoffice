@@ -530,6 +530,35 @@ def init_db():
         # 5. RPUs
         safe_drop_col('rpus', 'created_at')
 
+        # 7. Posts — ampliar content_score CHECK a 1.2 (SQLite no permite ALTER CONSTRAINT)
+        try:
+            # Comprobamos si el constraint actual sigue siendo el viejo (0 AND 1)
+            row = conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='posts'").fetchone()
+            if row and 'AND 1)' in (row[0] or '') and '1.2' not in (row[0] or ''):
+                print("[DB] Migrando constraint content_score posts: 0-1 → 0-1.2")
+                conn.executescript("""
+                    PRAGMA foreign_keys = OFF;
+                    CREATE TABLE IF NOT EXISTS posts_new (
+                        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                        profile_id       INTEGER NOT NULL REFERENCES profiles(id),
+                        url              TEXT    NOT NULL UNIQUE,
+                        mention_type_id  INTEGER REFERENCES list_values(id),
+                        mention_offset   INTEGER NOT NULL DEFAULT 0,
+                        content_score    REAL    CHECK(content_score BETWEEN 0 AND 1.2),
+                        published_at     TEXT
+                    );
+                    INSERT OR IGNORE INTO posts_new SELECT id,profile_id,url,mention_type_id,mention_offset,content_score,published_at FROM posts;
+                    DROP TABLE posts;
+                    ALTER TABLE posts_new RENAME TO posts;
+                    CREATE INDEX IF NOT EXISTS idx_post_profile ON posts(profile_id);
+                    PRAGMA foreign_keys = ON;
+                """)
+                conn.commit()
+                print("[DB] ✅ Migración content_score posts completada")
+        except Exception as e:
+            print(f"[DB] Error migrando posts constraint: {e}")
+
+
         # 6. Ambassadors soft delete
         safe_add_col('ambassadors', 'is_active', 'INTEGER NOT NULL DEFAULT 1')
 
