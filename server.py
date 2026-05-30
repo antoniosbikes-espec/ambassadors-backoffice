@@ -1429,13 +1429,59 @@ class Handler(BaseHTTPRequestHandler):
               p.handle, p.ambassador_id,
               a.first_name || ' ' || COALESCE(a.last_name,'') AS ambassador_name,
               lv_plat.value AS platform, lv_plat.value AS platform_value,
-              COALESCE(SUM(dv.new_views),0) AS total_views
+              lv_country.value AS country_value,
+              COALESCE(SUM(dv.new_views),0) AS total_views,
+              -- Revenue esperado por post usando fórmula del dashboard
+              CASE
+                WHEN LOWER(COALESCE(lv_plat.value,'')) = 'youtube' THEN
+                  ROUND(
+                    (COALESCE(pa.expected_views,0) / 1000.0) * 42.0
+                    * COALESCE(po.content_score, pa.content_target_score, 1.0)
+                    * MIN(COALESCE(pa.country_target_score, 0.6) / 0.6, 1.0)
+                    * CASE COALESCE(CAST(pa.cache_score AS TEXT),'MID')
+                        WHEN '0.8' THEN 0.8 WHEN '0.8' THEN 0.8
+                        WHEN '1.2' THEN 1.2 ELSE 1.0
+                      END
+                    * CASE UPPER(COALESCE(lv_country.value,''))
+                        WHEN 'ESTADOS UNIDOS' THEN 5.0
+                        WHEN 'US' THEN 5.0
+                        WHEN 'AUSTRALIA' THEN 3.67 WHEN 'AU' THEN 3.67
+                        WHEN 'CANADÁ' THEN 3.67 WHEN 'CANADA' THEN 3.67 WHEN 'CA' THEN 3.67
+                        WHEN 'ALEMANIA' THEN 3.0 WHEN 'DE' THEN 3.0
+                        WHEN 'IRLANDA' THEN 3.0 WHEN 'IE' THEN 3.0
+                        WHEN 'ITALIA' THEN 2.67 WHEN 'IT' THEN 2.67
+                        WHEN 'REINO UNIDO' THEN 2.0 WHEN 'GB' THEN 2.0 WHEN 'UK' THEN 2.0
+                        WHEN 'FRANCIA' THEN 1.47 WHEN 'FR' THEN 1.47
+                        WHEN 'ESPAÑA' THEN 1.33 WHEN 'ES' THEN 1.33
+                        WHEN 'PORTUGAL' THEN 0.72 WHEN 'PT' THEN 0.72
+                        WHEN 'MÉXICO' THEN 1.0 WHEN 'MEXICO' THEN 1.0 WHEN 'MX' THEN 1.0
+                        WHEN 'COLOMBIA' THEN 0.53 WHEN 'CO' THEN 0.53
+                        WHEN 'CHILE' THEN 0.53 WHEN 'CL' THEN 0.53
+                        WHEN 'BRASIL' THEN 0.33 WHEN 'BRAZIL' THEN 0.33 WHEN 'BR' THEN 0.33
+                        WHEN 'ARGENTINA' THEN 0.4 WHEN 'AR' THEN 0.4
+                        ELSE 0.12
+                      END
+                    * 2.5
+                  , 2)
+                WHEN LOWER(COALESCE(lv_plat.value,'')) = 'tiktok' THEN
+                  ROUND(
+                    (COALESCE(pa.expected_views,0) / 1000.0) * 42.0
+                    * COALESCE(po.content_score, pa.content_target_score, 1.0)
+                    * MIN(COALESCE(pa.country_target_score, 0.6) / 0.6, 1.0)
+                    * 1.0
+                  , 2)
+                ELSE 0
+              END AS expected_revenue_post
             FROM posts po
             JOIN profiles p ON p.id = po.profile_id
             JOIN ambassadors a ON a.id = p.ambassador_id
             LEFT JOIN list_values lv_mt   ON lv_mt.id   = po.mention_type_id
             LEFT JOIN list_values lv_plat ON lv_plat.id = p.platform_id
+            LEFT JOIN list_values lv_country ON lv_country.id = a.country_id
             LEFT JOIN daily_views dv ON dv.post_id = po.id
+            LEFT JOIN profile_analyses pa ON pa.id = (
+                SELECT id FROM profile_analyses WHERE profile_id = p.id ORDER BY created_at DESC LIMIT 1
+            )
         """
         params = []
         where = []

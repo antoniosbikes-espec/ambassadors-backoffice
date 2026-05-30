@@ -1725,6 +1725,7 @@ async function renderPosts() {
       <td><span class="badge badge-country">${p.mention_type || p.mention_type_value || '—'}</span></td>
       <td><strong>${fmt(p.total_views || 0, 'compact')}</strong></td>
       <td>${scoreBar(p.content_score)}</td>
+      <td><strong style="color:var(--accent-teal)">${p.expected_revenue_post > 0 ? fmt(p.expected_revenue_post, 'currency') : '<span style="color:var(--text-tertiary)">—</span>'}</strong></td>
       <td><a href="${p.url}" target="_blank" class="btn-link" style="font-size:12px">Ver ↗</a></td>
       <td>
         <button class="btn-icon" onclick="openAddViewsModal(${p.id})" title="Añadir views"
